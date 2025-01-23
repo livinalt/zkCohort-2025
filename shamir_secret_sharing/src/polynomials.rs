@@ -21,39 +21,43 @@ impl Polynomial {
     }
 
     pub fn evaluate(&self, x: f64) -> f64 {
-        let mut result = 0.0;
-        let mut power = 1.0;
+        // let mut result = 0.0;
+        // let mut power = 1.0;
 
-        for i in 0..self.coefficient.len() {
-            result = result + self.coefficient[i] * power;
-            power = power * x;
-        }
-        result
+        // for i in 0..self.coefficient.len() {
+        //     result = result + self.coefficient[i] * power;
+        //     power = power * x;
+        // }
+        // result
+                self.coefficient.iter().rev().cloned().reduce(|acc, curr|acc * x + curr).unwrap()
     }
 
     // Polynomial interpolation (Lagrange interpolation)
     pub fn interpolate(xs: Vec<f64>, ys: Vec<f64>) -> Self {
-        let mut result = Polynomial::new(vec![0.0]);  // Start with a zero polynomial
-        
-        for i in 0..xs.len() {
-            let mut basis_poly = Polynomial::new(vec![1.0]);  // l_i(x)
+    let mut result = Polynomial::new(vec![0.0]);  // Start with a zero polynomial
 
-            for j in 0..xs.len() {
-                if i != j {
-                    let numerator = Polynomial::new(vec![(xs[i] - xs[j]), 1.0]);  // x - x_j
-                    let denominator = xs[i] - xs[j]; // x_i - x_j
+    for i in 0..xs.len() {
+        let mut basis_poly = Polynomial::new(vec![1.0]);  // l_i(x)
 
-                    basis_poly = &basis_poly * &numerator;
-                    basis_poly = basis_poly.scalar_mul(&denominator);  // We now multiply by the denominator
-                }
+        for j in 0..xs.len() {
+            if i != j {
+                let numerator = Polynomial::new(vec![(-xs[j]), 1.0]);  // x - x_j
+                let denominator = xs[i] - xs[j]; // x_i - x_j
+
+                basis_poly = &basis_poly * &numerator;
+
+                // Invert the denominator and multiply
+                let inv_denominator = Polynomial::new(vec![1.0 / denominator]);
+                basis_poly = &basis_poly * &inv_denominator;  // Now multiply by the inverted denominator
             }
-
-            let scalar = ys[i];
-            let term = basis_poly.scalar_mul(&scalar);
-            result = &result + &term;
         }
-        result
+
+        let scalar = ys[i];
+        let term = basis_poly.scalar_mul(&scalar);
+        result = &result + &term;
     }
+    result
+}
 
     fn scalar_mul(&self, scalar: &f64) -> Self {
         Polynomial {

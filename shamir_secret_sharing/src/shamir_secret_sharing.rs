@@ -1,5 +1,6 @@
 use crate::polynomials::Polynomial;
 use std::vec::Vec;
+// use ark_std::test_rng;
 
 #[derive(Debug, Clone)]
 pub struct Share {
@@ -25,6 +26,7 @@ impl SecretSharing {
     // Generate shares using polynomial interpolation
     pub fn generate_shares(&self) -> Vec<Share> {
         let mut coefficients = vec![self.secret];
+        // let mut rng = test_rng();
         for _ in 1..self.threshold {
             let coefficient = rand::random::<f64>(); // Random coefficients
             coefficients.push(coefficient);
