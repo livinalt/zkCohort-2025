@@ -48,8 +48,8 @@ impl <F: PrimeField>Polynomial<F> {
 
             for j in 0..xs.len() {
                 if i != j {
-                    let numerator = Polynomial::<F>::new(vec![(xs[i] - xs[j]), F::one()]);  // x - x_j
-                    let denominator = xs[i] - xs[j]; // x_i - x_j
+                    let numerator = Polynomial::<F>::new(vec![(- xs[j]), F::one()]);  // x - x_j
+                    let denominator = (xs[i] - xs[j]).inverse().unwrap(); // x_i - x_j
 
                     basis_poly = &basis_poly * &numerator;
                     basis_poly = basis_poly.scalar_mul(&denominator);  // We now multiply by the denominator
