@@ -13,7 +13,7 @@ pub struct SumCheck<F: PrimeField> {
 #[derive(Clone)]
 pub struct ProverState<F: PrimeField> {
     evaluations: Vec<F>, // stores polynomial evaluations at all points
-    rng: test_rng(),
+    rng: rand::rngs::StdRng,
     num_vars: usize,    // number of variables in the polynomial
 }
 
