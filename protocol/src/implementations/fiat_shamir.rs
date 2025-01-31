@@ -175,7 +175,6 @@ mod tests {
 
     #[test]
     fn test_prover_and_verifier() {
-        // Define a polynomial: f(x) = 3x^2 + 2x + 1
         let polynomial = vec![Fr::from(1), Fr::from(2), Fr::from(3)];
         let transcript = Transcript::<Keccak256>::new();
         let mut prover = Prover::init(polynomial.clone(), transcript.clone());
@@ -191,7 +190,7 @@ mod tests {
 
     #[test]
     fn test_different_polynomial() {
-        // Define a different polynomial: f(x) = 4x^3 + 3x^2 + 2x + 1
+        //different polynomial: f(x) = 4x^3 + 3x^2 + 2x + 1
         let polynomial = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
         let transcript = Transcript::<Keccak256>::new();
         let mut prover = Prover::init(polynomial.clone(), transcript.clone());
@@ -207,7 +206,7 @@ mod tests {
 
     #[test]
     fn test_empty_polynomial() {
-        // Define an empty polynomial
+        // test an empty polynomial
         let polynomial: Vec<Fr> = vec![];
         let transcript = Transcript::<Keccak256>::new();
         let mut prover = Prover::init(polynomial.clone(), transcript.clone());
@@ -242,7 +241,7 @@ mod tests {
 
     #[test]
     fn test_higher_degree_polynomial() {
-        // Define a higher degree polynomial: f(x) = x^4 + 2x^3 + 3x^2 + 4x + 5
+        // test a higher degree polynomial: f(x) = x^4 + 2x^3 + 3x^2 + 4x + 5
         let polynomial = vec![Fr::from(5), Fr::from(4), Fr::from(3), Fr::from(2), Fr::from(1)];
         let transcript = Transcript::<Keccak256>::new();
         let mut prover = Prover::init(polynomial.clone(), transcript.clone());
