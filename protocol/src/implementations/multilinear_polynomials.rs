@@ -116,16 +116,52 @@ mod tests {
         assert!(!bytes.is_empty());
     }
 
-    // #[test]
-    // fn test_interpolation() {
-    //     let evaluations = vec![
-    //         Fq::from(1u64),
-    //         Fq::from(2u64),
-    //         Fq::from(3u64),
-    //         Fq::from(4u64),
-    //     ];
 
-    //     let poly = MultilinearPoly::<Fr>::interpolate(&evaluations);
-    //     assert_eq!(poly.evaluated_values, evaluations);
-    // }
+     #[test]
+
+    fn test_evaluate_three_variables() {
+        //for a three-variable polynomial with 8 evaluated values
+        let poly = MultilinearPoly::new(vec![
+            Fq::from(1u64),  // f(0, 0, 0)
+            Fq::from(2u64),  // f(0, 0, 1)
+            Fq::from(3u64),  // f(0, 1, 0)
+            Fq::from(4u64),  // f(0, 1, 1)
+            Fq::from(5u64),  // f(1, 0, 0)
+            Fq::from(6u64),  // f(1, 0, 1)
+            Fq::from(7u64),  // f(1, 1, 0)
+            Fq::from(8u64),  // f(1, 1, 1)
+        ]);
+
+        // Evaluate at (0, 0, 0)
+        assert_eq!(
+            poly.evaluate(vec![Fq::from(0u64), Fq::from(0u64), Fq::from(0u64)]),
+            Fq::from(1u64)
+        );
+
+        // Evaluate at (1, 0, 0)
+        assert_eq!(
+            poly.evaluate(vec![Fq::from(1u64), Fq::from(0u64), Fq::from(0u64)]),
+            Fq::from(5u64)
+        );
+
+        // Evaluate at (0, 1, 0)
+        assert_eq!(
+            poly.evaluate(vec![Fq::from(0u64), Fq::from(1u64), Fq::from(0u64)]),
+            Fq::from(3u64)
+        );
+
+        // Evaluate at (0, 0, 1)
+        assert_eq!(
+            poly.evaluate(vec![Fq::from(0u64), Fq::from(0u64), Fq::from(1u64)]),
+            Fq::from(2u64)
+        );
+
+        // Evaluate at (1, 1, 1)
+        assert_eq!(
+            poly.evaluate(vec![Fq::from(1u64), Fq::from(1u64), Fq::from(1u64)]),
+            Fq::from(8u64)
+        );
+    }
+
+
 }
