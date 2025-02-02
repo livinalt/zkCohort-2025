@@ -1,167 +1,105 @@
-use ark_ff::PrimeField;
-use ark_ff::BigInteger;
+use ark_ff::{PrimeField, Fp256, BigInteger256};
+use std::marker::PhantomData;
 use ark_bn254::Fr;
 
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct MultilinearPoly<F: PrimeField> {
-    evaluated_values: Vec<F>,
+
+// evaluated form: the values are from the BHC [0,0,0,3,0,0,2,5]
+// a. define the struct
+// b. insert the values of the variables
+// c. solve the polynomial
+
+
+struct Polynomial <F:PrimeField>{
+    evaluated_points: Vec<F>,
+    number_of_variables: i32,
+    _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField> MultilinearPoly<F> {
-    pub fn new(evaluated_values: Vec<F>) -> Self {
-        Self { evaluated_values }
+impl<F: PrimeField> Polynomial<F> {
+
+    
+    pub fn init_poly(evaluated_points: Vec<F>, number_of_variables:i32) -> Polynomial<F> {
+        let mut new_poly = Polynomial::<F> { evaluated_points: Vec::new(), number_of_variables, _marker: PhantomData };
+        new_poly.evaluated_points = evaluated_points;
+        new_poly
     }
 
-    // Evaluate the polynomial at a given point
-    pub fn evaluate(&self, values: Vec<F>) -> F {
-        let mut cloned_poly = self.evaluated_values.clone();
-        let number_of_partial_evaluation = values.len();
 
-        for i in 0..number_of_partial_evaluation {
-            cloned_poly = self.partial_evaluation(cloned_poly, values[i]);
+    pub fn evaluation(new_poly: Polynomial<F>) -> F {
+    let mut evaluation_sum = F::from(0u32);
+    for i in 0..new_poly.evaluated_points.len(){
+        evaluation_sum += new_poly.evaluated_points[i];
         }
-
-        cloned_poly[0]
+        evaluation_sum
     }
 
-    // Convert evaluated values to bytes
-    pub fn convert_to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
 
-        for value in &self.evaluated_values {
-            bytes.extend(value.into_bigint().to_bytes_be());
-        }
+    pub fn partial_evaluation(new_poly: &Polynomial<F>) -> Result<F, &'static str> {
+        let mut evaluated_points = new_poly.evaluated_points.clone();
+        let num_vars = new_poly.number_of_variables as usize;
 
-        bytes
-    }
 
-    /// Generate a partial evaluation by fixing one variable
-    fn partial_evaluation(&self, cloned_poly: Vec<F>, fixed_a: F) -> Vec<F> {
-        let half_size = cloned_poly.len() / 2;
-        let mut new_coefficients = vec![F::zero(); half_size];
+        // Process each bit
+        for bit in 0..num_vars {
+            let step = 2_usize.pow((num_vars - bit - 1) as u32);
+            let mut new_evaluated_points = Vec::new();
 
-        for i in 0..half_size {
-            new_coefficients[i] =
-                cloned_poly[i] * (F::one() - fixed_a) + cloned_poly[i + half_size] * fixed_a;
-        }
-
-        new_coefficients
-    }
-
-    // Reconstructs the polynomial
-    pub fn interpolate(evaluations: &[F]) -> MultilinearPoly<F> {
-        let n = evaluations.len();
-        assert!(n.is_power_of_two(), "Number of evaluations must be a power of 2");
-
-        let mut coefficients = evaluations.to_vec();
-        let mut step = 1;
-
-        while step < n {
-            for i in 0..(n / (2 * step)) {
+            // Pair and interpolate
+            for i in (0..evaluated_points.len()).step_by(step * 2) {
                 for j in 0..step {
-                    let idx1 = i * 2 * step + j;
-                    let idx2 = idx1 + step;
-
-                    coefficients[idx1] =
-                        (coefficients[idx1] + coefficients[idx2]) * F::from(2u64).inverse().unwrap();
-                    coefficients[idx2] =
-                        (coefficients[idx1] - coefficients[idx2]) * F::from(2u64).inverse().unwrap();
+                    let left = evaluated_points[i + j];
+                    let right = evaluated_points[i + j + step];
+                    let interpolated_value = left  + right;
+                    new_evaluated_points.push(interpolated_value);
                 }
             }
-            step *= 2;
+
+            // Update evaluated_points for the next iteration
+            evaluated_points = new_evaluated_points;
         }
 
-        MultilinearPoly::new(coefficients)
-    }
+        // Return the final result
+        Ok(evaluated_points[0])
 }
 
+}
+
+
+
+
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use ark_bn254::Fq;
+mod test{
+    use ark_bn254::Fr;
+    use super::Polynomial;
+
+#[test]
+fn test_evaluation() {
+    let evaluated_points: Vec<Fr> = vec![Fr::from(0), Fr::from(0), Fr::from(1), Fr::from(3), Fr::from(0), Fr::from(0), Fr::from(2), Fr::from(5)];
+    let number_of_variables: i32 = 3;
+
+    let new_poly = Polynomial::<Fr>::init_poly(evaluated_points, number_of_variables);
+    let evaluation_sum = Polynomial::evaluation(new_poly);
+
+    println!("The evaluation sum is: {}", evaluation_sum);
+    assert_eq!(evaluation_sum, Fr::from(11u32)); 
+}
 
     #[test]
-    fn test_evaluate() {
-        let poly = MultilinearPoly::new(vec![
-            Fq::from(1u64),
-            Fq::from(2u64),
-            Fq::from(3u64),
-            Fq::from(4u64),
-        ]);
+fn test_partial_evaluation() {
+    let evaluated_points: Vec<Fr> = vec![Fr::from(0), Fr::from(0), Fr::from(0), Fr::from(3), Fr::from(0), Fr::from(0), Fr::from(2), Fr::from(5), Fr::from(0), Fr::from(0), Fr::from(1), Fr::from(3), Fr::from(0), Fr::from(0), Fr::from(2), Fr::from(5)];
+    let number_of_variables: i32 = 4;
 
-        // Evaluate at (0, 0)
-        assert_eq!(poly.evaluate(vec![Fq::from(0u64), Fq::from(0u64)]), Fq::from(1u64));
+    let new_poly = Polynomial::<Fr>::init_poly(evaluated_points, number_of_variables);
+    let result = Polynomial::<Fr>::partial_evaluation(&new_poly).unwrap();
+    println!("{}", result);
 
-        // Evaluate at (1, 0)
-        assert_eq!(poly.evaluate(vec![Fq::from(1u64), Fq::from(0u64)]), Fq::from(3u64));
+    let expected_result = Fr::from(21);
+    assert_eq!(result, expected_result, "Partial evaluation result is incorrect");
+}
 
-        // Evaluate at (0, 1)
-        assert_eq!(poly.evaluate(vec![Fq::from(0u64), Fq::from(1u64)]), Fq::from(2u64));
+}
 
-        // Evaluate at (1, 1)
-        assert_eq!(poly.evaluate(vec![Fq::from(1u64), Fq::from(1u64)]), Fq::from(4u64));
-    }
-
-    #[test]
-    fn test_convert_to_bytes() {
-        let poly = MultilinearPoly::new(vec![
-            Fq::from(1u64),
-            Fq::from(2u64),
-            Fq::from(3u64),
-            Fq::from(4u64),
-        ]);
-
-        let bytes = poly.convert_to_bytes();
-        assert!(!bytes.is_empty());
-    }
-
-
-     #[test]
-
-    fn test_evaluate_three_variables() {
-        //for a three-variable polynomial with 8 evaluated values
-        let poly = MultilinearPoly::new(vec![
-            Fq::from(1u64),  // f(0, 0, 0)
-            Fq::from(2u64),  // f(0, 0, 1)
-            Fq::from(3u64),  // f(0, 1, 0)
-            Fq::from(4u64),  // f(0, 1, 1)
-            Fq::from(5u64),  // f(1, 0, 0)
-            Fq::from(6u64),  // f(1, 0, 1)
-            Fq::from(7u64),  // f(1, 1, 0)
-            Fq::from(8u64),  // f(1, 1, 1)
-        ]);
-
-        // Evaluate at (0, 0, 0)
-        assert_eq!(
-            poly.evaluate(vec![Fq::from(0u64), Fq::from(0u64), Fq::from(0u64)]),
-            Fq::from(1u64)
-        );
-
-        // Evaluate at (1, 0, 0)
-        assert_eq!(
-            poly.evaluate(vec![Fq::from(1u64), Fq::from(0u64), Fq::from(0u64)]),
-            Fq::from(5u64)
-        );
-
-        // Evaluate at (0, 1, 0)
-        assert_eq!(
-            poly.evaluate(vec![Fq::from(0u64), Fq::from(1u64), Fq::from(0u64)]),
-            Fq::from(3u64)
-        );
-
-        // Evaluate at (0, 0, 1)
-        assert_eq!(
-            poly.evaluate(vec![Fq::from(0u64), Fq::from(0u64), Fq::from(1u64)]),
-            Fq::from(2u64)
-        );
-
-        // Evaluate at (1, 1, 1)
-        assert_eq!(
-            poly.evaluate(vec![Fq::from(1u64), Fq::from(1u64), Fq::from(1u64)]),
-            Fq::from(8u64)
-        );
-    }
-
-
+fn main() {
+    println!("Hello, multilinear polynomial!");
 }

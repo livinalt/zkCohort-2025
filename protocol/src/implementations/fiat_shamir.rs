@@ -23,7 +23,7 @@ impl<H: Digest + FixedOutputReset> Transcript<H> {
     }
 }
 
-// Prover struct
+// Prover struc
 struct Prover<F: PrimeField> {
     polynomial: Vec<F>,
     transcript: Transcript<Keccak256>,
@@ -40,10 +40,10 @@ impl<F: PrimeField> Prover<F> {
     fn generate_sum_and_univariate_poly(&self, evaluation: &[F]) -> (F, Vec<F>) {
         let claimed_sum = evaluation.iter().sum();
         let evaluation_len = evaluation.len() / 2;
-        let mut univar_poly = vec![];
-        univar_poly.push(evaluation.iter().take(evaluation_len).sum());
-        univar_poly.push(evaluation.iter().skip(evaluation_len).sum());
-        (claimed_sum, univar_poly)
+        let mut univariate_poly = vec![];
+        univariate_poly.push(evaluation.iter().take(evaluation_len).sum());
+        univariate_poly.push(evaluation.iter().skip(evaluation_len).sum());
+        (claimed_sum, univariate_poly)
     }
 
     fn generate_proof(&mut self, evaluation: Vec<F>) -> Proof<F> {
@@ -52,13 +52,13 @@ impl<F: PrimeField> Prover<F> {
         let no_of_vars = (evaluation.len() as f64).log2() as usize;
 
         for _ in 0..no_of_vars {
-            let (sum, univar_poly) = self.generate_sum_and_univariate_poly(&current_poly);
-            proof_array.push((sum, univar_poly.clone()));
+            let (sum, univariate_poly) = self.generate_sum_and_univariate_poly(&current_poly);
+            proof_array.push((sum, univariate_poly.clone()));
 
             // Absorb sum and univariate polynomial into the transcript
             self.transcript.absorb(sum.into_bigint().to_bytes_be().as_slice());
             self.transcript.absorb(
-                &univar_poly
+                &univariate_poly
                     .iter()
                     .map(|y| y.into_bigint().to_bytes_be())
                     .collect::<Vec<_>>()
@@ -108,12 +108,12 @@ impl<F: PrimeField> Verifier<F> {
 
     fn verify(&mut self) -> bool {
         let proof = &self.proof.univars_and_sums;
-        let mut rand_chal_array: Vec<F> = vec![];
+        let mut random_challenge_array: Vec<F> = vec![];
 
         for i in 0..proof.len() {
-            let (sum, univar_poly) = &proof[i];
+            let (sum, univariate_poly) = &proof[i];
             let mut claimed_sum: F = *sum;
-            let claim: F = univar_poly.iter().sum();
+            let claim: F = univariate_poly.iter().sum();
 
             // Verify that the claimed sum matches the computed sum
             if claimed_sum != claim {
@@ -123,7 +123,7 @@ impl<F: PrimeField> Verifier<F> {
             // Absorb sum and univariate polynomial into the transcript
             self.transcript.absorb(sum.into_bigint().to_bytes_be().as_slice());
             self.transcript.absorb(
-                &univar_poly
+                &univariate_poly
                     .iter()
                     .map(|y| y.into_bigint().to_bytes_be())
                     .collect::<Vec<_>>()
@@ -131,11 +131,11 @@ impl<F: PrimeField> Verifier<F> {
             );
 
             // random challenge r
-            let rand_chal = self.transcript.squeeze();
-            rand_chal_array.push(rand_chal);
+            let random_challenge = self.transcript.squeeze();
+            random_challenge_array.push(random_challenge);
 
             // Evaluate the polynomial at the random challenge
-            let current_poly = self.evaluate_interpolate(univar_poly.clone(), rand_chal);
+            let current_poly = self.evaluate_interpolate(univariate_poly.clone(), random_challenge);
             claimed_sum = current_poly[0];
 
             // Verify the claimed sum === the next sum in the proof
@@ -143,11 +143,11 @@ impl<F: PrimeField> Verifier<F> {
                 return false;
             }
 
-            // Oracle check= Verify the polynomial evaluation === the claimed sum
+            // Oracle check Verify the polynomial evaluation === the claimed sum
             if i == proof.len() - 1 {
                 let mut poly = self.polynomial.clone();
-                for rand_chal in rand_chal_array.iter() {
-                    poly = self.evaluate_interpolate(poly.clone(), *rand_chal);
+                for random_challenge in random_challenge_array.iter() {
+                    poly = self.evaluate_interpolate(poly.clone(), *random_challenge);
                 }
                 if poly[0] != current_poly[0] {
                     return false;
