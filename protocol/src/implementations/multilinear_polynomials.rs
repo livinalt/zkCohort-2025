@@ -10,7 +10,7 @@ use ark_bn254::Fr;
 // c. solve the polynomial
 
 
-struct Polynomial <F:PrimeField>{
+pub struct Polynomial <F:PrimeField>{
     evaluated_points: Vec<F>,
     number_of_variables: i32,
     _marker: PhantomData<F>,
@@ -35,9 +35,9 @@ impl<F: PrimeField> Polynomial<F> {
     }
 
 
-    pub fn partial_evaluation(new_poly: &Polynomial<F>) -> Result<F, &'static str> {
-        let mut evaluated_points = new_poly.evaluated_points.clone();
-        let num_vars = new_poly.number_of_variables as usize;
+    pub fn partial_evaluation(new_poly: &Polynomial<F>, mut evaluated_points: Vec<F>, num_vars: usize) -> Result<F, ()> {
+        // let mut evaluated_points = new_poly.evaluated_points.clone();
+        // let num_vars = new_poly.number_of_variables as usize;
 
 
         // Process each bit
@@ -91,7 +91,7 @@ fn test_partial_evaluation() {
     let number_of_variables: i32 = 4;
 
     let new_poly = Polynomial::<Fr>::init_poly(evaluated_points, number_of_variables);
-    let result = Polynomial::<Fr>::partial_evaluation(&new_poly).unwrap();
+    let result = Polynomial::<Fr>::partial_evaluation(&new_poly, new_poly.evaluated_points.clone(), new_poly.number_of_variables as usize).unwrap();
     println!("{}", result);
 
     let expected_result = Fr::from(21);

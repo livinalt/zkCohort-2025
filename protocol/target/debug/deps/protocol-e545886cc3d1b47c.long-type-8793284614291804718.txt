@@ -1,0 +1,1 @@
+sumcheck::Prover<Fp<MontBackend<FrConfig, 4>, 4>, {closure@src/implementations/sumcheck.rs:114:26: 114:45}>
