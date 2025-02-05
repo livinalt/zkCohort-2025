@@ -2,7 +2,7 @@ use std::iter::{Product, Sum};
 use std::ops::{Add, Mul};
 use std::result;
 
-use ark_ff::{PrimeField, Zero};
+use ark_ff::{PrimeField, Zero, One};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct UnivariatePoly <F>  {
@@ -135,22 +135,99 @@ impl <F: PrimeField> Product for UnivariatePoly<F> {
         result
     }
 }
-
 #[cfg(test)]
 mod tests {
+    use super::*;
     use ark_ff::{FftField, UniformRand};
     use ark_std::test_rng;
+    use ark_std::Zero;
+    use ark_bn254::Fq;
+use ark_bn254::Fq as F;
 
-    use crate::implementations::polynomials::UnivariatePoly;
+    #[test]
+    fn test_new_and_degree() {
+        let mut rng = test_rng();
+        let coeffs: Vec<Fq> = (0..5).map(|_| Fq::rand(&mut rng)).collect();
+        let poly = UnivariatePoly::new(coeffs.clone());
+        
+        assert_eq!(poly.coefficient, coeffs);
+        assert_eq!(poly.degree(), coeffs.len() - 1);
+    }
+
+    #[test]
+    fn test_evaluate() {
+        let mut rng = test_rng();
+        let coeffs = vec![F::one(), F::one(), F::one()]; // represents x^2 + x + 1
+        let poly = UnivariatePoly::new(coeffs);
+        
+        let x = F::one();
+        let result = poly.evaluate(x);
+        assert_eq!(result, F::one() + F::one() + F::one());
+    }
 
     #[test]
     fn test_interpolation() {
         let mut rng = test_rng();
-       
+        let xs = vec![F::zero(), F::one(), F::from(2u64)];
+        let ys = vec![F::one(), F::one(), F::one()];
+        
+        let poly = UnivariatePoly::interpolate(xs.clone(), ys.clone());
+        
+        // Verify that the polynomial passes through all points
+        for (&x, &y) in xs.iter().zip(ys.iter()) {
+            assert_eq!(poly.evaluate(x), y);
         }
-    
-
-    fn test_mul() {
-       
     }
+
+    #[test]
+    fn test_scalar_mul() {
+        let mut rng = test_rng();
+        let coeffs = vec![F::one(), F::one(), F::one()];
+        let poly = UnivariatePoly::new(coeffs.clone());
+        let scalar = F::from(2u64);
+        
+        let scaled = poly.scalar_mul(&scalar);
+        assert_eq!(
+            scaled.coefficient,
+            coeffs.into_iter().map(|c| c * scalar).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_add() {
+        let mut rng = test_rng();
+        let coeffs1 = vec![F::one(), F::one()];
+        let coeffs2 = vec![F::one(), F::one(), F::one()];
+        let poly1 = UnivariatePoly::new(coeffs1.clone());
+        let poly2 = UnivariatePoly::new(coeffs2.clone());
+        
+        let sum = &poly1 + &poly2;
+        let expected = vec![F::one() + F::one(), F::one() + F::one(), F::one()];
+        assert_eq!(sum.coefficient, expected);
+    }
+
+    #[test]
+    fn test_mul() {
+        let mut rng = test_rng();
+        let coeffs1 = vec![F::one(), F::one()]; // x + 1
+        let coeffs2 = vec![F::one(), F::one()]; // x + 1
+        let poly1 = UnivariatePoly::new(coeffs1.clone());
+        let poly2 = UnivariatePoly::new(coeffs2.clone());
+        
+        let product = &poly1 * &poly2;
+        let expected = vec![F::one(), F::one() + F::one(), F::one()]; // x^2 + 2x + 1
+        assert_eq!(product.coefficient, expected);
+    }
+
+    #[test]
+    fn test_sum() {
+        let mut rng = test_rng();
+        let poly1 = UnivariatePoly::new(vec![F::one(), F::one()]);
+        let poly2 = UnivariatePoly::new(vec![F::one(), F::one(), F::one()]);
+        
+        let sum: UnivariatePoly<F> = vec![poly1, poly2].into_iter().sum();
+        let expected = vec![F::one() + F::one(), F::one() + F::one(), F::one()];
+        assert_eq!(sum.coefficient, expected);
+    }
+
 }
