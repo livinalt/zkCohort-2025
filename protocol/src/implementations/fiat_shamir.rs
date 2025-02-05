@@ -1,111 +1,278 @@
-// use crate::implementations::transcript::Transcript;
-// use crate::implementations::multilinear_polynomials::Polynomial;
-// use ark_ff::{BigInteger, PrimeField};
-// use sha3::Keccak256;
+use crate::implementations::multilinear_polynomials::Polynomial;
+use crate::implementations::transcript::Transcript;
+use ark_ff::{BigInteger, PrimeField};
+use sha3::Keccak256;
 
-// struct Proof<F: PrimeField> {
-//     claimed_sum: F,
-//     round_polys: Vec<[F; 2]>,
-// }
+#[derive(Clone)]
+struct Proof<F: PrimeField> {
+    claimed_sum: F,
+    round_polys: Vec<[F; 2]>,
+    }
 
-// fn prove<F: PrimeField>(poly: &Polynomial<F>, claimed_sum: F) -> Proof<F> {
-//     let mut round_polys: Vec<[F; 2]> = vec![];
+fn prove<F: PrimeField>(poly: &Polynomial<F>, claimed_sum: F) -> Result<Proof<F>, String> {
+    let mut round_polys: Vec<[F; 2]> = vec![];
+    let mut transcript = Transcript::<F>::init();
+    let mut poly = poly.clone();
+    
+    // Validate polynomial structure
+    if poly.number_of_variables() == 0 {
+        return Err("Polynomial has no variables".to_string());
+    }
+    
+    for i in 0..poly.number_of_variables() {
+        // Compute the round polynomial
+        match Polynomial::partial_evaluation(&poly, i) {
+            Ok(partial_eval) => {
+                let evaluated_points = partial_eval.get_evaluated_points();
+                
+                // Validate evaluation points
+                if evaluated_points.len() < 2 {
+                    return Err(format!(
+                        "Insufficient evaluation points for variable {}: {:?}",
+                        i, evaluated_points
+                    ));
+                }
+                
+                // Create round polynomial with validation
+                let round_poly = match create_round_poly(evaluated_points.clone()) {
+                    Ok(p) => p,
+                    Err(e) => return Err(e),
+                };
+                
+                round_polys.push(round_poly);
 
-//     let mut transcript = Transcript::<F>::init();
+                println!("Evaluated points for variable {}: {:?}", i, evaluated_points);
+            println!("Round polynomial for variable {}: {:?}", i, round_poly);
+                
+                // Generate challenge
+                let challenge = transcript.squeeze();
+                
+                // Partially evaluate the polynomial
+                match Polynomial::partial_evaluation(&poly, i) {
+                    Ok(new_poly) => poly = new_poly,
+                    Err(e) => return Err(format!("Partial evaluation failed: {:?}", e)),
+                }
+            }
+            Err(e) => {
+                return Err(format!("Partial evaluation failed for variable {}: {:?}", i, e));
+            }
+        }
+    }
+    
+    Ok(Proof {
+        claimed_sum,
+        round_polys,
+    })
 
-//     // ... (transcript absorption of polynomial and claimed sum remains the same)
+}
 
-//     let mut poly = poly.clone();
+fn create_round_poly<F: PrimeField>(evaluated_points: Vec<F>) -> Result<[F; 2], String> {
+    if evaluated_points.len() < 2 {
+        return Err("Insufficient points for round polynomial".to_string());
+    }
+    Ok([evaluated_points[0], evaluated_points[1]])
+}
 
-//     for i in 0..poly.number_of_variables() {
-//         // Compute the round polynomial
-//         let round_poly: [F; 2] = [
-//             Polynomial::partial_evaluation(&poly, poly.get_evaluated_points().clone(), i).unwrap().get_evaluated_points()[0],
-//             Polynomial::partial_evaluation(&poly, poly.get_evaluated_points().clone(), i).unwrap().get_evaluated_points()[1], // Access index 1
-//         ];
+fn verify<F: PrimeField>(proof: &Proof<F>, poly: &Polynomial<F>) -> bool {
+    if proof.round_polys.len() != poly.number_of_variables() {
+        return false;
+    }
 
-//         // ... (transcript absorption of round polynomial remains the same)
+    let mut challenges = vec![];
 
-//         round_polys.push(round_poly);
+    let mut transcript = Transcript::<F>::init();
 
-//         // Generate a challenge
-//         let challenge = transcript.squeeze();
+    // Absorb the polynomial's evaluated points into the transcript
+    transcript.absorb(
+        poly.get_evaluated_points()
+            .iter()
+            .flat_map(|f| f.into_bigint().to_bytes_be())
+            .collect::<Vec<_>>()
+            .as_slice(),
+    );
 
-//         // Partially evaluate the polynomial at the challenge
-//         poly = Polynomial::partial_evaluation(&poly, poly.get_evaluated_points().clone(), i).unwrap(); // poly is now the new smaller polynomial
-//     }
+    // Absorb the claimed sum into the transcript
+    transcript.absorb(proof.claimed_sum.into_bigint().to_bytes_be().as_slice());
 
-//     Proof {
-//         claimed_sum,
-//         round_polys,
-//     }
-// }
+    let mut claimed_sum = proof.claimed_sum;
 
-// fn verify<F: PrimeField>(proof: &Proof<F>, poly: &Polynomial<F>) -> bool {
-//     if proof.round_polys.len() != poly.number_of_variables() {
-//         return false;
-//     }
+    for round_poly in &proof.round_polys {
+        // Check consistency of the round polynomial with the claimed sum
+        if claimed_sum != round_poly.iter().sum() {
+            return false;
+        }
 
-//     let mut challenges = vec![];
+        // Absorb the round polynomial into the transcript
+        transcript.absorb(
+            round_poly
+                .iter()
+                .flat_map(|f| f.into_bigint().to_bytes_be())
+                .collect::<Vec<_>>()
+                .as_slice(),
+        );
 
-//     let mut transcript = Transcript::<F>::init();
+        // Generate a challenge for the next round
+        let challenge = transcript.squeeze();
+        challenges.push(challenge);
 
-//     // Absorb the polynomial's evaluated points into the transcript
-//     transcript.absorb(
-//         poly.get_evaluated_points()
-//             .iter()
-//             .flat_map(|f| f.into_bigint().to_bytes_be())
-//             .collect::<Vec<_>>()
-//             .as_slice(),
-//     );
+        // Update the claimed sum for the next round
+        claimed_sum = round_poly[0] + challenge * (round_poly[1] - round_poly[0]);
+    }
 
-//     // Absorb the claimed sum into the transcript
-//     transcript.absorb(proof.claimed_sum.into_bigint().to_bytes_be().as_slice());
+    // Verify the final evaluation matches the polynomial's evaluation at the challenges
+    if claimed_sum != poly.evaluation(&challenges) {
+        return false;
+    }
 
-//     let mut claimed_sum = proof.claimed_sum;
-
-//     for round_poly in &proof.round_polys {
-//         // Check consistency of the round polynomial with the claimed sum
-//         if claimed_sum != round_poly.iter().sum() {
-//             return false;
-//         }
-
-//         // Absorb the round polynomial into the transcript
-//         transcript.absorb(
-//             round_poly
-//                 .iter()
-//                 .flat_map(|f| f.into_bigint().to_bytes_be())
-//                 .collect::<Vec<_>>()
-//                 .as_slice(),
-//         );
-
-//         // Generate a challenge for the next round
-//         let challenge = transcript.squeeze();
-//         challenges.push(challenge);
-
-//         // Update the claimed sum for the next round
-//         claimed_sum = round_poly[0] + challenge * (round_poly[1] - round_poly[0]);
-//     }
-
-//     // Verify the final evaluation matches the polynomial's evaluation at the challenges
-//     if claimed_sum != poly.evaluation(&challenges) {
-//         return false;
-//     }
-
-//     true
-// }
+    true
+}
 
 // #[cfg(test)]
 // mod tests {
 //     use super::*;
 //     use ark_bn254::Fr;
 
-//     #[test]
-//     fn test_sumcheck() {
-//         let evaluated_points = vec![Fr::from(0), Fr::from(0), Fr::from(0), Fr::from(3), Fr::from(0), Fr::from(0), Fr::from(2), Fr::from(5)];
-//         let poly = Polynomial::init_poly(evaluated_points, 3);
-//         let proof = prove(&poly, Fr::from(10));
+    // #[test]
+    // fn test_sumcheck() {
+    //     // Test case 1: Simple polynomial
+    //     let evaluated_points = vec![
+    //         Fr::from(0),
+    //         Fr::from(0),
+    //         Fr::from(1),
+    //         Fr::from(3),
+    //         Fr::from(0),
+    //         Fr::from(0),
+    //         Fr::from(2),
+    //         Fr::from(5),
+    //     ];
+    //     let poly = Polynomial::init_poly(evaluated_points, 3);
+    //     let proof = prove(&poly, Fr::from(10));
+    //     assert!(
+    //         verify(&proof, &poly),
+    //         "Sumcheck verification failed for simple polynomial"
+    //     );
 
-//         assert!(verify(&proof, &poly));
-//     }
-// }
+    //     // Test case 2: Another polynomial
+    //     let evaluated_points2 = vec![
+    //         Fr::from(1),
+    //         Fr::from(2),
+    //         Fr::from(3),
+    //         Fr::from(4),
+    //         Fr::from(5),
+    //         Fr::from(6),
+    //         Fr::from(7),
+    //         Fr::from(8),
+    //     ];
+    //     let poly2 = Polynomial::init_poly(evaluated_points2, 3);
+    //     let claimed_sum2 = poly2.get_evaluated_points().iter().sum(); // Calculate the correct sum
+    //     let proof2 = prove(&poly2, claimed_sum2);
+    //     assert!(
+    //         verify(&proof2, &poly2),
+    //         "Sumcheck verification failed for another polynomial"
+    //     );
+
+    //     // Test case 3:  Polynomial with different number of variables
+    //     let evaluated_points3 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
+    //     let poly3 = Polynomial::init_poly(evaluated_points3, 2);
+    //     let claimed_sum3 = poly3.get_evaluated_points().iter().sum(); // Calculate the correct sum
+    //     let proof3 = prove(&poly3, claimed_sum3);
+    //     assert!(
+    //         verify(&proof3, &poly3),
+    //         "Sumcheck verification failed for polynomial with 2 vars"
+    //     );
+
+    //     // Test case 4:  Claimed sum is wrong.
+    //     let proof_wrong_sum = prove(&poly, Fr::from(11)); // Incorrect sum
+    //     assert!(
+    //         !verify(&proof_wrong_sum, &poly),
+    //         "Sumcheck should have failed with incorrect sum"
+    //     );
+    // }
+
+    
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ark_ff::{Field, PrimeField};
+    use ark_poly::Polynomial as ArkPolynomial;
+    use ark_bn254::Fq as Fr; 
+    use rand::Rng;
+
+    // #[test]
+    // fn test_prove_and_verify_success() {
+    //     let mut rng = rand::thread_rng();
+    //     let poly = Polynomial::<Fr>::init_poly(vec![Fr::from(1), Fr::from(2), Fr::from(3)], 3); // Example polynomial
+    //     let claimed_sum = Fr::from(6); // Sum of coefficients
+
+    //     // Prove
+    //     let proof = prove(&poly, claimed_sum).expect("Proof generation failed");
+
+    //     // Verify
+    //     assert!(verify(&proof, &poly), "Verification failed for valid proof");
+    // }
+
+    #[test]
+    fn test_prove_with_no_variables() {
+        let poly = Polynomial::<Fr>::init_poly(vec![], 0); // No variables
+        let claimed_sum = Fr::from(0);
+
+        // Attempt to prove and expect an error
+        let result = prove(&poly, claimed_sum);
+        assert!(result.is_err(), "Expected error for polynomial with no variables");
+    }
+
+    // #[test]
+    // fn test_prove_with_insufficient_evaluation_points() {
+    //     let poly = Polynomial::<Fr>::init_poly(vec![Fr::from(1)], 1); // Single variable polynomial
+    //     let claimed_sum = Fr::from(1);
+
+    //     // Modify the implementation to return insufficient evaluation points for this case
+    //     let result = prove(&poly, claimed_sum);
+    //     assert!(result.is_err(), "Expected error for insufficient evaluation points");
+    // }
+
+    // #[test]
+    // fn test_verify_with_inconsistent_proof() {
+    //     let mut rng = rand::thread_rng();
+    //     let poly = Polynomial::<Fr>::init_poly(vec![Fr::from(1), Fr::from(2), Fr::from(3)], 3);
+    //     let claimed_sum = Fr::from(6);
+        
+    //     // Generate a valid proof
+    //     let proof = prove(&poly, claimed_sum).expect("Proof generation failed");
+
+    //     // Modify the proof to make it inconsistent
+    //     let mut inconsistent_proof = proof.clone();
+    //     inconsistent_proof.claimed_sum += Fr::from(1); // Altering claimed sum
+
+    //     // Verify should fail
+    //     assert!(!verify(&inconsistent_proof, &poly), "Verification should fail for inconsistent proof");
+    // }
+#[test]
+fn test_verify_with_wrong_polynomial() {
+    let original_poly = Polynomial::<Fr>::init_poly(
+        vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)], // Original points
+        2, // Number of variables
+    );
+
+    let claimed_sum = original_poly.get_evaluated_points().iter().sum(); // Correct sum
+    let proof = prove(&original_poly, claimed_sum).expect("Proof generation failed");
+
+            println!("climed sum check {}",claimed_sum);
+
+
+    let different_poly = Polynomial::<Fr>::init_poly(
+        vec![Fr::from(5), Fr::from(6), Fr::from(7), Fr::from(8)], 
+        2, 
+    );
+
+    // Verification should fail because the polynomial has changed
+    let result = verify(&proof, &different_poly);
+    assert!(!result, "Verification should fail for a polynomial with different points but the same length");
+
+    // If verification fails, print a message and pass the test
+    if !result {
+        println!("Test passed as expected: verification failed due to polynomial mismatch.");
+    }
+}
+
+}
