@@ -1,111 +1,111 @@
-use crate::implementations::transcript::Transcript;
-use crate::implementations::multilinear_polynomials::Polynomial;
-use ark_ff::{BigInteger, PrimeField};
-use sha3::Keccak256;
+// use crate::implementations::transcript::Transcript;
+// use crate::implementations::multilinear_polynomials::Polynomial;
+// use ark_ff::{BigInteger, PrimeField};
+// use sha3::Keccak256;
 
-struct Proof<F: PrimeField> {
-    claimed_sum: F,
-    round_polys: Vec<[F; 2]>,
-}
+// struct Proof<F: PrimeField> {
+//     claimed_sum: F,
+//     round_polys: Vec<[F; 2]>,
+// }
 
-fn prove<F: PrimeField>(poly: &Polynomial<F>, claimed_sum: F) -> Proof<F> {
-    let mut round_polys: Vec<[F; 2]> = vec![];
+// fn prove<F: PrimeField>(poly: &Polynomial<F>, claimed_sum: F) -> Proof<F> {
+//     let mut round_polys: Vec<[F; 2]> = vec![];
 
-    let mut transcript = Transcript::<F>::init();
+//     let mut transcript = Transcript::<F>::init();
 
-    // ... (transcript absorption of polynomial and claimed sum remains the same)
+//     // ... (transcript absorption of polynomial and claimed sum remains the same)
 
-    let mut poly = poly.clone();
+//     let mut poly = poly.clone();
 
-    for i in 0..poly.number_of_variables() {
-        // Compute the round polynomial
-        let round_poly: [F; 2] = [
-            Polynomial::partial_evaluation(&poly, poly.get_evaluated_points().clone(), i).unwrap().get_evaluated_points()[0],
-            Polynomial::partial_evaluation(&poly, poly.get_evaluated_points().clone(), i).unwrap().get_evaluated_points()[1], // Access index 1
-        ];
+//     for i in 0..poly.number_of_variables() {
+//         // Compute the round polynomial
+//         let round_poly: [F; 2] = [
+//             Polynomial::partial_evaluation(&poly, poly.get_evaluated_points().clone(), i).unwrap().get_evaluated_points()[0],
+//             Polynomial::partial_evaluation(&poly, poly.get_evaluated_points().clone(), i).unwrap().get_evaluated_points()[1], // Access index 1
+//         ];
 
-        // ... (transcript absorption of round polynomial remains the same)
+//         // ... (transcript absorption of round polynomial remains the same)
 
-        round_polys.push(round_poly);
+//         round_polys.push(round_poly);
 
-        // Generate a challenge
-        let challenge = transcript.squeeze();
+//         // Generate a challenge
+//         let challenge = transcript.squeeze();
 
-        // Partially evaluate the polynomial at the challenge
-        poly = Polynomial::partial_evaluation(&poly, poly.get_evaluated_points().clone(), i).unwrap(); // poly is now the new smaller polynomial
-    }
+//         // Partially evaluate the polynomial at the challenge
+//         poly = Polynomial::partial_evaluation(&poly, poly.get_evaluated_points().clone(), i).unwrap(); // poly is now the new smaller polynomial
+//     }
 
-    Proof {
-        claimed_sum,
-        round_polys,
-    }
-}
+//     Proof {
+//         claimed_sum,
+//         round_polys,
+//     }
+// }
 
-fn verify<F: PrimeField>(proof: &Proof<F>, poly: &Polynomial<F>) -> bool {
-    if proof.round_polys.len() != poly.number_of_variables() {
-        return false;
-    }
+// fn verify<F: PrimeField>(proof: &Proof<F>, poly: &Polynomial<F>) -> bool {
+//     if proof.round_polys.len() != poly.number_of_variables() {
+//         return false;
+//     }
 
-    let mut challenges = vec![];
+//     let mut challenges = vec![];
 
-    let mut transcript = Transcript::<F>::init();
+//     let mut transcript = Transcript::<F>::init();
 
-    // Absorb the polynomial's evaluated points into the transcript
-    transcript.absorb(
-        poly.get_evaluated_points()
-            .iter()
-            .flat_map(|f| f.into_bigint().to_bytes_be())
-            .collect::<Vec<_>>()
-            .as_slice(),
-    );
+//     // Absorb the polynomial's evaluated points into the transcript
+//     transcript.absorb(
+//         poly.get_evaluated_points()
+//             .iter()
+//             .flat_map(|f| f.into_bigint().to_bytes_be())
+//             .collect::<Vec<_>>()
+//             .as_slice(),
+//     );
 
-    // Absorb the claimed sum into the transcript
-    transcript.absorb(proof.claimed_sum.into_bigint().to_bytes_be().as_slice());
+//     // Absorb the claimed sum into the transcript
+//     transcript.absorb(proof.claimed_sum.into_bigint().to_bytes_be().as_slice());
 
-    let mut claimed_sum = proof.claimed_sum;
+//     let mut claimed_sum = proof.claimed_sum;
 
-    for round_poly in &proof.round_polys {
-        // Check consistency of the round polynomial with the claimed sum
-        if claimed_sum != round_poly.iter().sum() {
-            return false;
-        }
+//     for round_poly in &proof.round_polys {
+//         // Check consistency of the round polynomial with the claimed sum
+//         if claimed_sum != round_poly.iter().sum() {
+//             return false;
+//         }
 
-        // Absorb the round polynomial into the transcript
-        transcript.absorb(
-            round_poly
-                .iter()
-                .flat_map(|f| f.into_bigint().to_bytes_be())
-                .collect::<Vec<_>>()
-                .as_slice(),
-        );
+//         // Absorb the round polynomial into the transcript
+//         transcript.absorb(
+//             round_poly
+//                 .iter()
+//                 .flat_map(|f| f.into_bigint().to_bytes_be())
+//                 .collect::<Vec<_>>()
+//                 .as_slice(),
+//         );
 
-        // Generate a challenge for the next round
-        let challenge = transcript.squeeze();
-        challenges.push(challenge);
+//         // Generate a challenge for the next round
+//         let challenge = transcript.squeeze();
+//         challenges.push(challenge);
 
-        // Update the claimed sum for the next round
-        claimed_sum = round_poly[0] + challenge * (round_poly[1] - round_poly[0]);
-    }
+//         // Update the claimed sum for the next round
+//         claimed_sum = round_poly[0] + challenge * (round_poly[1] - round_poly[0]);
+//     }
 
-    // Verify the final evaluation matches the polynomial's evaluation at the challenges
-    if claimed_sum != poly.evaluation(&challenges) {
-        return false;
-    }
+//     // Verify the final evaluation matches the polynomial's evaluation at the challenges
+//     if claimed_sum != poly.evaluation(&challenges) {
+//         return false;
+//     }
 
-    true
-}
+//     true
+// }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ark_bn254::Fr;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use ark_bn254::Fr;
 
-    #[test]
-    fn test_sumcheck() {
-        let evaluated_points = vec![Fr::from(0), Fr::from(0), Fr::from(0), Fr::from(3), Fr::from(0), Fr::from(0), Fr::from(2), Fr::from(5)];
-        let poly = Polynomial::init_poly(evaluated_points, 3);
-        let proof = prove(&poly, Fr::from(10));
+//     #[test]
+//     fn test_sumcheck() {
+//         let evaluated_points = vec![Fr::from(0), Fr::from(0), Fr::from(0), Fr::from(3), Fr::from(0), Fr::from(0), Fr::from(2), Fr::from(5)];
+//         let poly = Polynomial::init_poly(evaluated_points, 3);
+//         let proof = prove(&poly, Fr::from(10));
 
-        assert!(verify(&proof, &poly));
-    }
-}
+//         assert!(verify(&proof, &poly));
+//     }
+// }
