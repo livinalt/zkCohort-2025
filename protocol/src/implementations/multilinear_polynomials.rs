@@ -2,25 +2,48 @@ use ark_ff::PrimeField;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Polynomial<F: PrimeField> {
-    pub number_of_variables: usize,
     pub evaluated_points: Vec<F>,
 }
 
 impl<F: PrimeField> Polynomial<F> {
-    pub fn new(evaluated_points: Vec<F>, number_of_variables: usize) -> Self {
-        Polynomial { evaluated_points, number_of_variables }
+    pub fn new(evaluated_points: Vec<F>) -> Self {
+        Polynomial { evaluated_points }
     }
 
     
-    pub fn evaluate(&mut self, values: Vec<F>) -> F {
-        for i in 0..values.len() {
-            *self = self.partial_evaluate((self.number_of_variables - 1, values[i]));
+    pub fn evaluate(&mut self, values:Vec<(usize, F)>) -> F {
+        for (position,val ) in values{
+            *self = self.partial_evaluate((position, val));
         }
         self.evaluated_points[0]
     }
 
+    // let length = self.coefficients.len();
+    //     if 2_i32.pow(pos as u32 + 1u32) > length as i32 {
+    //         panic!(
+    //             "The position is out of range for this polynomial with {} coefficients",
+    //             self.coefficients.len()
+    //         );
+    //     }
 
-    pub fn partial_evaluate(&mut self, (position, value): (usize, F)) -> Self {
+    //     let mut new_coefficients = vec![F::zero(); (&length / 2).try_into().unwrap()];
+
+    //     let unique_pairs_coefficients = Self::get_unique_pairs_coefficients(self.coefficients.clone(), pos);
+    //     println!(
+    //         "Coefficients of Unique Pairs: {:?}",
+    //         unique_pairs_coefficients
+    //     );
+
+    //     for (i, (c_i, c_pair_index)) in unique_pairs_coefficients.iter().enumerate() {
+    //         new_coefficients[i] = *c_i + val * (*c_pair_index - c_i);
+    //     }
+
+    //     MultilinearPoly::new(new_coefficients)
+
+
+
+
+    pub fn partial_evaluate(&mut self, (position, val): (usize, F)) -> Self {
         let length = self.evaluated_points.len();
 
     if length % 2 != 0 {
@@ -33,10 +56,10 @@ impl<F: PrimeField> Polynomial<F> {
         println!("evals of Unique Pairs: {:?}", unique_pairs_evals);
 
         for (i, (eval_1, eval_2)) in unique_pairs_evals.iter().enumerate() {
-            new_evaluated_points[i] = *eval_1 + value * (*eval_2 - eval_1);
+            new_evaluated_points[i] = *eval_1 + val * (*eval_2 - eval_1);
         }
 
-        Polynomial::new(new_evaluated_points, self.number_of_variables - 1)
+        Polynomial::new(new_evaluated_points)
     }
 
 
@@ -58,7 +81,6 @@ impl<F: PrimeField> Polynomial<F> {
 
 }
 
-
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -68,111 +90,25 @@ pub(crate) mod tests {
         input.iter().map(|v| Fr::from(*v)).collect()
     }
 
-
     #[test]
-    fn test_evaluate(){
-        let mut test_poly = Polynomial::new(
-            vec![
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(3),
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(2),
-                Fq::from(5),
-            ],
-            3,
-        );
-        let result = test_poly.evaluate(vec![Fq::from(1), Fq::from(5), Fq::from(3)]);
-        assert_eq!(result, Fq::from(55));
-    }
-
-    #[test]
-
-    fn test_evaluate_2(){
-        let mut test_poly = Polynomial::new(
-            vec![
-                Fq::from(1),
-                Fq::from(0),
-                Fq::from(2),
-                Fq::from(3),
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(2),
-                Fq::from(5),
-            ],
-            3,
-        );
-        let result = test_poly.evaluate(vec![Fq::from(1), Fq::from(5), Fq::from(3)]);
-        assert_eq!(result, Fq::from(55));
-    }
-    
-    #[test]
-    fn test_partial_evaluate_polynomial_a_2v() {
-        let mut poly = Polynomial::<Fq> {
-            evaluated_points: vec![Fq::from(0), Fq::from(2), Fq::from(0), Fq::from(5)],
-            number_of_variables: 2,
-        };
-
-        let partial_evaluated_poly = poly.partial_evaluate((1, Fq::from(5)));
-        assert_eq!(
-            partial_evaluated_poly.evaluated_points,
-            vec![Fq::from(0), Fq::from(17)]
-        );
-    }
-
-    #[test]
-    fn test_partial_evaluate_polynomial_b_2v() {
-        let mut poly = Polynomial::<Fq> {
-            evaluated_points: vec![Fq::from(0), Fq::from(2), Fq::from(0), Fq::from(5)],
-            number_of_variables: 2,
-        };
-
-        let partial_evaluated_poly = poly.partial_evaluate((0, Fq::from(3)));
-        assert_eq!(
-            partial_evaluated_poly.evaluated_points,
-            vec![Fq::from(6), Fq::from(15)]
-        );
-    }
-
-    #[test]
-    fn test_partial_evaluate_polynomial_a_3v() {
-        let mut test_poly = Polynomial::new(
-            vec![
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(3),
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(2),
-                Fq::from(5),
-            ],
-            3,
-        );
-        let result = test_poly.partial_evaluate((2, Fq::from(1)));
-        assert_eq!(
+    fn test_evaluate() {
+        let mut test_poly = Polynomial::new(vec![
+            Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3),
+            Fq::from(0), Fq::from(0), Fq::from(2), Fq::from(5),
+        ]);
+    let result = test_poly.partial_evaluate((1, Fq::from(5)));
+       assert_eq!(
             result.evaluated_points,
-            vec![Fq::from(0), Fq::from(0), Fq::from(2), Fq::from(5)]
+            vec![Fq::from(0), Fq::from(15), Fq::from(10), Fq::from(25)]
         );
     }
 
     #[test]
     fn test_partial_evaluate_polynomial_a() {
-        let mut test_poly = Polynomial::new(
-            vec![
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(3),
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(2),
-                Fq::from(5),
-            ],
-            3,
-        );
+        let mut test_poly = Polynomial::new(vec![
+            Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3),
+            Fq::from(0), Fq::from(0), Fq::from(2), Fq::from(5),
+        ]);
         let result = test_poly.partial_evaluate((1, Fq::from(5)));
         assert_eq!(
             result.evaluated_points,
@@ -182,47 +118,14 @@ pub(crate) mod tests {
 
     #[test]
     fn test_partial_evaluate_polynomial_b() {
-        let mut test_poly = Polynomial::new(
-            vec![
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(3),
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(2),
-                Fq::from(5),
-            ],
-            3,
-        );
+        let mut test_poly = Polynomial::new(vec![
+            Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3),
+            Fq::from(0), Fq::from(0), Fq::from(2), Fq::from(5),
+        ]);
         let result = test_poly.partial_evaluate((0, Fq::from(3)));
         assert_eq!(
             result.evaluated_points,
             vec![Fq::from(0), Fq::from(9), Fq::from(0), Fq::from(11)]
         );
     }
-
-    #[test]
-    fn test_evaluate_polynomial_c() {
-        let mut test_poly = Polynomial::new(
-            vec![
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(3),
-                Fq::from(0),
-                Fq::from(0),
-                Fq::from(2),
-                Fq::from(5),
-            ],
-            3,
-        );
-        let result = test_poly.evaluate(vec![Fq::from(1), Fq::from(5), Fq::from(3)]);
-        assert_eq!(result, Fq::from(55));
-    }
-
 }
-
-    fn main() {
-    println!("Hello, Multilinear Polynomials");
-    }
