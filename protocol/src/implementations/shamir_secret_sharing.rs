@@ -5,11 +5,6 @@ use std::vec::Vec;
 
 
 
-fn main(){
-    println!("Hello, Shamir Secret Sharing")
-}
-
-
 #[derive(Debug, Clone)]
 pub struct Share<F> {
     pub x: F,
@@ -38,12 +33,12 @@ impl<F: PrimeField> SecretSharing<F> {
         for _ in 1..self.threshold {
             let random_coefficient = F::rand(&mut rng);
             dbg!(&random_coefficient);
-
+            
             coefficients.push(random_coefficient);
         }
-
+        
         let polynomial = UnivariatePoly::new(coefficients);
-
+        
         let mut shares = Vec::new();
         for x in 1..=self.total_shares {
             let y = polynomial.evaluate(F::from(x)); 
@@ -52,7 +47,7 @@ impl<F: PrimeField> SecretSharing<F> {
 
         shares
     }
-
+    
     // Reconstructing the secret using Lagrange interpolation
     pub fn reconstruct_secret(&self, shares: &[Share<F>]) -> F {
         let xs: Vec<F> = shares.iter().map(|share| share.x).collect();
@@ -70,29 +65,24 @@ mod tests {
     use ark_std::UniformRand;
     use ark_std::Zero;
     use ark_std::One;
-
     use ark_bn254::Fq;
-    use rand::Rng as _;
-
+    
     #[test]
     fn test_secret_sharing_basic() {
         let mut rng = test_rng();
         let secret: Fq = Fq::rand(&mut rng);
         let total_shares = 5;
         let threshold = 3;
-
+        
         let sharing = SecretSharing::new(secret, total_shares, threshold);
         let shares = sharing.generate_shares();
         
-        // Verify number of shares
         assert_eq!(shares.len() as u64, total_shares);
         
-        // Verify share structure
         for (i, share) in shares.iter().enumerate() {
             assert_eq!(share.x, Fq::from(i as u64 + 1));
         }
         
-        // Verify reconstruction with all shares
         let reconstructed = sharing.reconstruct_secret(&shares);
         assert_eq!(reconstructed, secret);
     }
@@ -107,7 +97,6 @@ mod tests {
         let sharing = SecretSharing::new(secret, total_shares, threshold);
         let shares = sharing.generate_shares();
         
-        // Test reconstruction with threshold number of shares
         let reconstructed = sharing.reconstruct_secret(&shares[0..threshold as usize]);
         assert_eq!(reconstructed, secret);
     }
@@ -122,46 +111,20 @@ mod tests {
         let sharing = SecretSharing::new(secret, total_shares, threshold);
         let shares = sharing.generate_shares();
         
-        // Test reconstruction with fewer than threshold shares
         let reconstructed = sharing.reconstruct_secret(&shares[0..(threshold - 1) as usize]);
         assert_ne!(reconstructed, secret);
     }
-
-    // #[test]
-    // fn test_secret_sharing_random_points() {
-    //     let mut rng = test_rng();
-    //     let secret: Fq = Fq::rand(&mut rng);
-    //     let total_shares = 5;
-    //     let threshold = 3;
-
-    //     let sharing = SecretSharing::new(secret, total_shares, threshold);
-    //     let shares = sharing.generate_shares();
-        
-    //     // Test reconstruction with random subset of shares
-    //     let mut used_indices = Vec::new();
-    //     while used_indices.len() < threshold as usize {
-    //         let idx = rng.gen_range(0..total_shares);
-    //         if !used_indices.contains(&idx) {
-    //             used_indices.push(idx);
-    //         }
-    //     }
-        
-    //     let reconstructed = sharing.reconstruct_secret(
-    //         &used_indices.iter().map(|&i| &shares[i as usize]).collect::<Vec<_>>()
-    //     );
-    //     assert_eq!(reconstructed, secret);
-    // }
+    
 
     #[test]
     fn test_secret_sharing_zero_secret() {
         let secret = Fq::zero();
         let total_shares = 5;
         let threshold = 3;
-
+        
         let sharing = SecretSharing::new(secret, total_shares, threshold);
         let shares = sharing.generate_shares();
         
-        // Verify reconstruction with zero secret
         let reconstructed = sharing.reconstruct_secret(&shares);
         assert_eq!(reconstructed, secret);
     }
@@ -171,12 +134,16 @@ mod tests {
         let secret = Fq::one();
         let total_shares = 5;
         let threshold = 3;
-
+        
         let sharing = SecretSharing::new(secret, total_shares, threshold);
         let shares = sharing.generate_shares();
         
-        // Verify reconstruction with one secret
         let reconstructed = sharing.reconstruct_secret(&shares);
         assert_eq!(reconstructed, secret);
     }
+}
+
+
+fn main(){
+    println!("Hello, Shamir Secret Sharing")
 }
