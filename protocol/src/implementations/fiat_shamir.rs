@@ -1,158 +1,218 @@
-// use crate::implementations::multilinear_polynomial::Polynomial;
-// use crate::implementations::transcript::{Transcript, HashTrait};
-// use ark_ff::{BigInteger, PrimeField};
-// use sha3::Keccak256;
+use crate::implementations::multilinear_polynomial::MultilinearPoly;
+use crate::implementations::transcript::{Transcript, HashTrait};
+use ark_ff::{BigInteger, PrimeField};
+use ark_bn254::Fq;
+use sha3::{Keccak256, Digest};
 
-// struct Proof<F: PrimeField> {
-//     claimed_sum: F,
-//     round_polys: Vec<[F; 2]>,
-// }
-
-// fn prove<F: PrimeField>(mut poly: Polynomial<F>, claimed_sum: F) -> Proof<F> {
-//     let mut round_polys: Vec<[F; 2]> = vec![];
-//     let mut transcript = Transcript::<Keccak256, F>::init(Keccak256::default());
-    
-//     // Absorb initial polynomial evaluations and claimed sum.
-//     transcript.absorb(
-//     poly.evaluated_points
-//             .iter()
-//             .flat_map(|f| f.into_bigint().to_bytes_be())
-//             .collect::<Vec<_>>()
-//             .as_slice(),
-//     );
-
-//     transcript.absorb(
-//         claimed_sum.into_bigint().to_bytes_be().as_slice()
-//     );
-
-    
-//     for _ in 0..poly.number_of_variables {
-//         // For branch checking: derive the sum of the evaluations when fixing the last variable to 0 and 1.
-//         let poly_left = poly.partial_evaluate((0, F::zero()));
-//             // .expect("Failed to partially evaluate polynomial for left branch");
-//         let poly_right = poly.partial_evaluate((1, F::one()));
-//             // .expect("Failed to partially evaluate polynomial for right branch");
-
-//         let round_poly: [F; 2] = [
-
-//             // LHS == f(0)
-//             poly.partial_evaluate((poly.number_of_variables - 1, F::zero()))
-//                 .evaluated_points
-//                 .iter()
-//                 .sum(),
-
-//                 // RHS ==> f(1)
-//             poly.partial_evaluate((poly.number_of_variables - 1, F::one())).evaluated_points.iter().cloned().sum(),
-//         ];
-//         transcript.absorb(
-//             round_poly.iter()
-//                 .flat_map(|f| f.into_bigint().to_bytes_be())
-//                 .collect::<Vec<_>>()
-//                 .as_slice()
-//         );
-//         round_polys.push(round_poly);
-        
-//         // Squeeze a challenge from the transcript.
-//         let challenge = transcript.squeeze();
-//         // Partially evaluate the polynomial along the last variable using the challenge.
-//         let challenge_bytes = challenge.into_bigint().to_bytes_be();
-//         transcript.absorb(&challenge_bytes);
-//         poly = poly.partial_evaluate((poly.number_of_variables - 1, challenge));
-//     }
-    
-//     Proof {
-//         claimed_sum,
-//         round_polys,
-//     }
-// }
-
-// fn verify<F: PrimeField>(proof: &Proof<F>, poly: &mut Polynomial<F>) -> bool {
-//     if proof.round_polys.len() != poly.number_of_variables {
-//         return false;
-//     }
-
-//     let mut challenges = vec![];
-
-//     let mut transcript = Transcript::<Keccak256, F>::init(Keccak256::default());
-
-//     transcript.absorb(
-
-//         poly.evaluated_points
-//             .iter()
-//             .flat_map(|f| f.into_bigint().to_bytes_be())
-//             .collect::<Vec<_>>()
-//             .as_slice(),
-//     );
-
-//     transcript.absorb(proof.claimed_sum.into_bigint().to_bytes_be().as_slice());
-
-//     let mut claimed_sum = proof.claimed_sum;
-
-//     for round_poly in &proof.round_polys {
-//         if claimed_sum != round_poly.iter().sum() {
-//             return false;
-//         }
-
-//         transcript.absorb(
-//             round_poly
-//                 .iter()
-//                 .flat_map(|f| f.into_bigint().to_bytes_be())
-//                 .collect::<Vec<_>>()
-//                 .as_slice(),
-//         );
-
-//         let challenge = transcript.squeeze();
-
-//         challenges.push(challenge);
-        
-//         claimed_sum = round_poly[0] + challenge * (round_poly[1] - round_poly[0]);
-//     }
-
-//     if claimed_sum != poly.evaluate(challenges) {
-//         return false;
-//     }
-
-//     true
-// }
-
-// #[cfg(test)]
-// mod tests {
-//     use crate::implementations::multilinear_polynomials::Polynomial;
-//     use crate::implementations::fiat_shamir::{prove, verify};
-//     use ark_bn254::Fr;
+#[derive(Debug, Clone)]
+pub struct Proof {
+    claimed_sum: Fq,
+    proof_polynomials: Vec<Vec<Fq>>,
+}
 
 
-//     //check this test
-//     // #[test]
-//     // fn test_sumcheck() {
-//     //     let mut poly = Polynomial::new(
-//     //         vec![Fr::from(0), Fr::from(0), Fr::from(0), Fr::from(3), Fr::from(0), Fr::from(0), Fr::from(2), Fr::from(5)],
-//     //         3
-//     //     );
-//     //     let proof = prove(poly.clone(), Fr::from(10));
+// Helper function to computes the partial sums of of the poly
+fn partial_sum_proof(polynomial: &[Fq]) -> Vec<Fq> {
+    let split_poly_length = polynomial.len() / 2;
 
-//     //     dbg!(verify(&proof, &mut poly));
-//     // }
+    let f_0 = &polynomial[..split_poly_length]; 
+    let f_1 = &polynomial[split_poly_length..]; 
 
-//     #[test]
-// fn test_sumcheck() {
-//     let mut poly = Polynomial::new(
-//         vec![
-//             Fr::from(0), 
-//             Fr::from(0), 
-//             Fr::from(0), 
-//             Fr::from(3), 
-//             Fr::from(0), 
-//             Fr::from(0), 
-//             Fr::from(2), 
-//             Fr::from(5)
-//         ],
-//         3,
-//     );
-    
-//     let proof = prove(poly.clone(), Fr::from(10));
-    
-//     assert!(verify(&proof, &mut poly), "Proof verification failed");
-// }
+    let mut s_0 = Fq::from(0);
+    for i in 0..f_0.len() {
+        s_0 += f_0[i];
+    }
 
-// }
+    let mut s_1 = Fq::from(0); 
+    for i in 0..f_1.len() {
+        s_1 += f_1[i];
+    }
+
+    vec![s_0, s_1]
+}
+
+/// prover operation
+pub fn prove(polynomial: &MultilinearPoly<Fq>) -> Proof {
+    let mut transcript = Transcript::<Keccak256, Fq>::init(Keccak256::new());
+    transcript.absorb(&to_bytes(&polynomial.evaluation));
+
+    let claimed_sum: Fq = polynomial.evaluation.iter().sum();
+    transcript.absorb(&to_bytes(&[claimed_sum]));
+
+    let num_rounds = polynomial.evaluation.len().ilog2();
+    let mut proof_polynomials = Vec::with_capacity(num_rounds as usize);
+    let mut current_poly = polynomial.clone();
+
+    for _ in 0..num_rounds {
+        let proof_poly = partial_sum_proof(&current_poly.evaluation);
+
+        transcript.absorb(&to_bytes(&proof_poly));
+
+        proof_polynomials.push(proof_poly);
+
+        let random_challenge = transcript.squeeze();
+
+        current_poly = current_poly.partial_evaluate(0, &random_challenge);
+    }
+
+    Proof {
+        proof_polynomials,
+        claimed_sum,
+    }
+
+}
+
+/// verifier operationpub 
+fn verify(polynomial: &MultilinearPoly<Fq>, proof: Proof) -> bool {
+    // Initialize the transcript
+    let mut transcript = Transcript::<Keccak256, Fq>::init(Keccak256::new());
+    transcript.absorb(&to_bytes(&polynomial.evaluation));
+    transcript.absorb(&to_bytes(&[proof.claimed_sum]));
+
+    let mut current_poly = polynomial.clone();
+    let mut random_challenges = Vec::with_capacity(proof.proof_polynomials.len());
+    let mut expected_sum = proof.claimed_sum;
+
+    for poly in proof.proof_polynomials {
+        let poly = MultilinearPoly::new(poly.to_vec());
+
+        let mut sum = Fq::from(0);
+        for eval in &poly.evaluation {
+            sum += *eval;
+        }
+
+        if sum != expected_sum {
+            return false;
+        }
+
+        transcript.absorb(&to_bytes(&poly.evaluation));
+
+        let random_challenge = transcript.squeeze();            // Generates random challenge r
+
+        expected_sum = poly.evaluation[0] + random_challenge * (poly.evaluation[1] - poly.evaluation[0]);        // Update the expected sum for the next round
+
+        current_poly = current_poly.partial_evaluate(0, &random_challenge);       // Partially evaluate the current polynomial
+
+        random_challenges.push(random_challenge);
+    }
+
+    let poly_eval_sum = current_poly.full_evaluation(random_challenges);
+
+    expected_sum == poly_eval_sum
+}
+
+
+fn to_bytes(values: &[Fq]) -> Vec<u8> {
+    values
+        .iter()
+        .flat_map(|x| x.into_bigint().to_bytes_le())
+        .collect()
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use ark_bn254::Fq;
+
+    #[test]
+    fn test_valid_proving_and_verification() {
+        //  case 1
+        let initial_polynomial = MultilinearPoly::new(vec![
+            Fq::from(1),
+            Fq::from(2),
+            Fq::from(3),
+            Fq::from(4),
+        ]);
+
+        let proof = prove(&initial_polynomial);
+        let is_verified = verify(&initial_polynomial, proof);
+        assert_eq!(is_verified, true, "Test Case 1 Failed");
+
+        // another case 2
+        let initial_polynomial = MultilinearPoly::new(vec![
+            Fq::from(0),
+            Fq::from(0),
+            Fq::from(0),
+            Fq::from(2),
+            Fq::from(0),
+            Fq::from(10),
+            Fq::from(0),
+            Fq::from(17),
+        ]);
+
+        let proof = prove(&initial_polynomial);
+        let is_verified = verify(&initial_polynomial, proof);
+        assert_eq!(is_verified, true, "Test Case 2 Failed");
+
+        //Testing all zeros
+        let initial_polynomial = MultilinearPoly::new(vec![
+            Fq::from(0),
+            Fq::from(0),
+            Fq::from(0),
+            Fq::from(0),
+        ]);
+
+        let proof = prove(&initial_polynomial);
+        let is_verified = verify(&initial_polynomial, proof);
+        assert_eq!(is_verified, true, "Test Case 3 Failed");
+
+    }
+
+    #[test]
+    fn test_invalid_proof_doesnt_verify() {
+        let initial_polynomial =
+            MultilinearPoly::new(vec![Fq::from(0), Fq::from(3), Fq::from(2), Fq::from(5)]);
+
+        let tampered_claimed_sum = Fq::from(21); // correct sum is 10
+        let proof = prove(&initial_polynomial);
+        let false_proof = Proof {
+            claimed_sum: tampered_claimed_sum,
+            proof_polynomials: proof.proof_polynomials,
+        };
+        let is_verified = verify(&initial_polynomial, false_proof);
+        assert_eq!(is_verified, false, "Tampered Claimed Sum Test Failed");
+
+        let mut tampered_proof_polynomials = prove(&initial_polynomial).proof_polynomials;
+        if let Some(first_poly) = tampered_proof_polynomials.first_mut() {
+            if let Some(first_element) = first_poly.first_mut() {
+                *first_element += Fq::from(1); 
+            }
+        }
+        let false_proof = Proof {
+            claimed_sum: prove(&initial_polynomial).claimed_sum,
+            proof_polynomials: tampered_proof_polynomials,
+        };
+
+        let is_verified = verify(&initial_polynomial, false_proof);
+        assert_eq!(is_verified, false, "Tampered Proof Polynomials Test Failed");
+
+    }
+
+    #[test]
+    fn test_intermediate_sum_check() {
+        // This test focuses on checking intermediate sum at each round
+        let initial_polynomial = MultilinearPoly::new(vec![Fq::from(1), Fq::from(2), Fq::from(3), Fq::from(4)]);
+        let claimed_sum: Fq = initial_polynomial.evaluation.iter().sum();
+
+        let mut transcript = Transcript::<Keccak256, Fq>::init(Keccak256::new());
+        transcript.absorb(&to_bytes(&initial_polynomial.evaluation));
+        transcript.absorb(&to_bytes(&[claimed_sum]));
+
+        let num_rounds = initial_polynomial.evaluation.len().ilog2();
+        let mut current_poly = initial_polynomial.clone();
+        let mut expected_sum = claimed_sum;
+
+        for _ in 0..num_rounds {
+            let proof_poly = partial_sum_proof(&current_poly.evaluation);
+
+            assert_eq!(proof_poly.iter().sum::<Fq>(), expected_sum, "Intermediate sum check failed!");
+
+            transcript.absorb(&to_bytes(&proof_poly));
+            let random_challenge = transcript.squeeze();
+
+            expected_sum = proof_poly[0] + random_challenge * (proof_poly[1] - proof_poly[0]);
+            current_poly = current_poly.partial_evaluate(0, &random_challenge);
+        }
+    }
+}
