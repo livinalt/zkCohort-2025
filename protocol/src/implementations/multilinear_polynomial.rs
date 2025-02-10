@@ -1,7 +1,8 @@
 use ark_ff::PrimeField;
+use std::fmt::Display;
 use std::ops::Add;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MultilinearPoly<F: PrimeField> {
     pub evaluation: Vec<F>,
     pub number_of_variables: usize,
@@ -9,11 +10,16 @@ pub struct MultilinearPoly<F: PrimeField> {
 
 impl<F: PrimeField> MultilinearPoly<F> {
     pub fn new(new_evaluations: Vec<F>) -> Self {
+        if new_evaluations.is_empty() {
+            panic!("Evaluation set cannot be empty");
+        }
         let number_of_variables: usize = new_evaluations.len().ilog2() as usize;
+        println!("number of variables::{}", number_of_variables);
 
         if new_evaluations.len() != 1 << number_of_variables {
-            panic!("Invalid evaluations sets");
+            panic!("Invalid evaluations");
         }
+        println!("Evaluations length: {}", new_evaluations.len());
 
         Self {
             evaluation: new_evaluations,
@@ -22,21 +28,27 @@ impl<F: PrimeField> MultilinearPoly<F> {
     }
 
     fn pair_points(bit: usize, number_of_variables: usize) -> Vec<(usize, usize)> {
-
         let mut result = vec![];
-        let target_hc = number_of_variables - 1;
+
+        if bit >= number_of_variables {
+            return result;
+        }
+
+        let target_hc = number_of_variables.saturating_sub(1);
 
         for val in 0..(1 << target_hc) {
             let inverted_index = number_of_variables - bit - 1;
-            let insert_zero = insert_bit(val, inverted_index);
+            if inverted_index >= usize::BITS as usize {
+                continue;
+            }
+            let insert_zero = val & !(1 << inverted_index);
             let insert_one = insert_zero | (1 << inverted_index);
             result.push((insert_zero, insert_one));
         }
+
         result
     }
 
-        // empoying the equation of a straight line for partial evaluation
-        // f(x) = y_0 + r(y_1 - y_0)
     pub fn partial_evaluate(&self, bit: usize, value: &F) -> Self {
         let mut result = vec![];
 
@@ -49,12 +61,22 @@ impl<F: PrimeField> MultilinearPoly<F> {
             result.push(y_0 + *value * (y_1 - y_0));
         }
 
+        if result.is_empty() {
+            panic!("Partial evaluation results in an empty vector!");
+        }
+
+        println!(
+            "The partial evaluate result is = {}",
+            format!("{:?}", result)
+        );
+
         Self::new(result)
     }
 
     pub fn full_evaluation(&self, values: Vec<F>) -> F {
         if values.len() != self.number_of_variables {
-            panic!("Invalid number of values");
+
+               panic!("Invalid number of values");
         }
 
         let mut result = self.clone();
@@ -100,7 +122,7 @@ fn insert_bit(value: usize, bit: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_bn254::Fr as F; 
+    use ark_bn254::Fr as F;
     use ark_ff::{One, Zero};
 
     #[test]
@@ -112,18 +134,12 @@ mod tests {
         assert_eq!(poly.number_of_variables, 2);
     }
 
-    // #[test]
-    // #[should_panic]
-    // fn test_new_invalid_evaluations() {
-    //     let _ = MultilinearPoly::<F>::new(vec![F::zero(), F::one()]);
-    // }
-
     #[test]
     fn test_partial_evaluate() {
         let evaluations = vec![F::zero(), F::one(), F::one(), F::zero()];
         let poly = MultilinearPoly::new(evaluations);
 
-        let value = F::from(2u64); 
+        let value = F::from(2u64);
         let new_poly = poly.partial_evaluate(0, &value);
 
         assert_eq!(new_poly.evaluation.len(), 2);
@@ -147,9 +163,6 @@ mod tests {
 
         let sum = poly1.clone() + poly2.clone();
 
-        assert_eq!(
-            sum.evaluation,
-            vec![F::one(), F::one(), F::one(), F::one()]
-        );
+        assert_eq!(sum.evaluation, vec![F::one(), F::one(), F::one(), F::one()]);
     }
 }

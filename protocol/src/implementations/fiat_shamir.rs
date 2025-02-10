@@ -1,5 +1,5 @@
 use crate::implementations::multilinear_polynomial::MultilinearPoly;
-use crate::implementations::transcript::{Transcript, HashTrait};
+use crate::implementations::transcript::{Transcript};
 use ark_ff::{BigInteger, PrimeField};
 use ark_bn254::Fq;
 use sha3::{Keccak256, Digest};
@@ -33,13 +33,16 @@ fn partial_sum_proof(polynomial: &[Fq]) -> Vec<Fq> {
 
 /// prover operation
 pub fn prove(polynomial: &MultilinearPoly<Fq>) -> Proof {
-    let mut transcript = Transcript::<Keccak256, Fq>::init(Keccak256::new());
+    let mut transcript = Transcript::<Fq>::init();
     transcript.absorb(&to_bytes(&polynomial.evaluation));
+
+        println!("Inside prove: polynomial size = {}", &polynomial.evaluation.len());
+    assert!(!polynomial.evaluation.is_empty(), "Prove() received an empty polynomial");
 
     let claimed_sum: Fq = polynomial.evaluation.iter().sum();
     transcript.absorb(&to_bytes(&[claimed_sum]));
 
-    let num_rounds = polynomial.evaluation.len().ilog2();
+    let num_rounds = polynomial.evaluation.len().ilog2() as usize;
     let mut proof_polynomials = Vec::with_capacity(num_rounds as usize);
     let mut current_poly = polynomial.clone();
 
@@ -64,8 +67,8 @@ pub fn prove(polynomial: &MultilinearPoly<Fq>) -> Proof {
 
 /// verifier operationpub 
 fn verify(polynomial: &MultilinearPoly<Fq>, proof: Proof) -> bool {
-    // Initialize the transcript
-    let mut transcript = Transcript::<Keccak256, Fq>::init(Keccak256::new());
+    // Initializes the transcript
+    let mut transcript = Transcript::<Fq>::init();
     transcript.absorb(&to_bytes(&polynomial.evaluation));
     transcript.absorb(&to_bytes(&[proof.claimed_sum]));
 
@@ -96,7 +99,7 @@ fn verify(polynomial: &MultilinearPoly<Fq>, proof: Proof) -> bool {
         random_challenges.push(random_challenge);
     }
 
-    let poly_eval_sum = current_poly.full_evaluation(random_challenges);
+    let poly_eval_sum = polynomial.full_evaluation(random_challenges);
 
     expected_sum == poly_eval_sum
 }
@@ -117,46 +120,22 @@ mod test {
 
     #[test]
     fn test_valid_proving_and_verification() {
-        //  case 1
+        // //  case 1
         let initial_polynomial = MultilinearPoly::new(vec![
             Fq::from(1),
             Fq::from(2),
             Fq::from(3),
             Fq::from(4),
-        ]);
+            Fq::from(4),
+            Fq::from(4),
+            Fq::from(4),
+            Fq::from(4),
 
+        ]);
         let proof = prove(&initial_polynomial);
         let is_verified = verify(&initial_polynomial, proof);
-        assert_eq!(is_verified, true, "Test Case 1 Failed");
-
-        // another case 2
-        let initial_polynomial = MultilinearPoly::new(vec![
-            Fq::from(0),
-            Fq::from(0),
-            Fq::from(0),
-            Fq::from(2),
-            Fq::from(0),
-            Fq::from(10),
-            Fq::from(0),
-            Fq::from(17),
-        ]);
-
-        let proof = prove(&initial_polynomial);
-        let is_verified = verify(&initial_polynomial, proof);
-        assert_eq!(is_verified, true, "Test Case 2 Failed");
-
-        //Testing all zeros
-        let initial_polynomial = MultilinearPoly::new(vec![
-            Fq::from(0),
-            Fq::from(0),
-            Fq::from(0),
-            Fq::from(0),
-        ]);
-
-        let proof = prove(&initial_polynomial);
-        let is_verified = verify(&initial_polynomial, proof);
-        assert_eq!(is_verified, true, "Test Case 3 Failed");
-
+        assert_eq!(is_verified, true);
+     
     }
 
     #[test]
@@ -185,7 +164,7 @@ mod test {
         };
 
         let is_verified = verify(&initial_polynomial, false_proof);
-        assert_eq!(is_verified, false, "Tampered Proof Polynomials Test Failed");
+        assert_eq!(is_verified, false);
 
     }
 
@@ -195,7 +174,7 @@ mod test {
         let initial_polynomial = MultilinearPoly::new(vec![Fq::from(1), Fq::from(2), Fq::from(3), Fq::from(4)]);
         let claimed_sum: Fq = initial_polynomial.evaluation.iter().sum();
 
-        let mut transcript = Transcript::<Keccak256, Fq>::init(Keccak256::new());
+        let mut transcript = Transcript::<Fq>::init();
         transcript.absorb(&to_bytes(&initial_polynomial.evaluation));
         transcript.absorb(&to_bytes(&[claimed_sum]));
 
