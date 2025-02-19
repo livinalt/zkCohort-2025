@@ -27,7 +27,7 @@ pub struct Circuit<F: PrimeField> {
 }
 
 impl Operator {
-    fn use_operator<F: PrimeField>(self, a: F, b: F) -> F {
+    pub fn use_operator<F: PrimeField>(self, a: F, b: F) -> F {
         match self {
             Operator::Add => a + b,
             Operator::Mul => a * b,
@@ -103,7 +103,7 @@ impl<F: PrimeField> Circuit<F> {
         }
     }
 
-    fn evaluate(&mut self, inputs: Vec<F>) -> Vec<Vec<F>> {
+    pub fn evaluate(&mut self, inputs: Vec<F>) -> Vec<Vec<F>> {
         let mut result: Vec<Vec<F>> = Vec::new();
         let mut current_inputs: Vec<F> = inputs;
 

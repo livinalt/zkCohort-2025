@@ -1,0 +1,49 @@
+sum check verifier
+  //pick random challenge (r1)
+        //evaluate fb(r1) to get m1
+        //send r1 to P,
+        //P sends back to fc to V
+        //checks if fc(0) + fc(1) = fb(r1)
+        //if yes, pick r2, compute fc(r2) = C3
+        //return c3, r1,r2, true
+
+
+grk verifier 
+ //compute Ar and Mr
+        //get o1 and o2 from prover
+        //compute f0(r1,r2) = Ar.(o1+o2) + Mr.(o1.o2)
+        //check f0(r1,r2) (i.e evaluated at r1,r2) == final_claimed_sum
+        //if true, do alpha 
+
+
+gkr process
+/**
+ * starts 45:20
+ * P sends output poly (w0) to V
+ * V sends random challenge (rc) to P
+ * both evaluate w0 at rc -> m0 = w0(r) (first claimed sum)
+ * now P proves m0 is w0(r)
+ * P could rewrite w0(r) as f(r,b,c)
+ * INVOKE sumcheck and do this:
+ * sum check protocol
+ * P sends claimed sum(m0) and f(b) as initial poly to V
+ * V checks fb0+fb1 == m0
+ * V picks r1, evaluates fb(r1) m01 and sends r1 to P
+ * P does next round and sends fc to V
+ * V checks fc0 + fc1 == m01
+ * V picks r2 to perform oracle check
+ * back to gkr protocol
+ * f(r1,r2) == fc(r2)
+ * V can compute fc(r2) but not f(r1, r2) which is also f0(r1,r2)
+ * done with sumcheck
+ * f0(r1,r2) = add(r1,r2).(w1(r1) + w1(r2)) + mul(r1,r2).(w1(r1) . w1(r2))
+ * add(r1,r2) and mul(r1,r2) are in the circuit and be computed by V as Ar, Mr
+ * V cant compute w1(r1) and w1(r2) since V doesnt know w1
+ * P sends w1(r1) as o1 and w1(r2) as o2 to V
+ * f0(r1,r2) becomes Ar.(01+02) + Mr.(o1.o2)
+ * V checks f0(r1,r2) == fc(r2)
+ * done with round 1
+ * V doesnt trust o1 and o2, so we run round 2 for them, using w1 and w2
+ * combine them using 2to1 trick
+ * rinse and repeat till we reach input layer
+*/
