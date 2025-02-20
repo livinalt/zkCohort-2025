@@ -15,7 +15,7 @@ pub struct Proof {
 }
 
 pub fn prove(circuit: &mut Circuit<Fq>, inputs: Vec<Fq>) -> Proof {
-    let mut transcript = Transcript::<Fq>::new();
+    let mut transcript = Transcript::<Fq>::init();
 
     let mut circuit_evaluations = circuit.evaluate(inputs);
 

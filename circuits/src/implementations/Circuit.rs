@@ -16,7 +16,7 @@ pub struct Gate<F: PrimeField> {
     pub operator: Operator,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Layer<F: PrimeField> {
     pub gates: Vec<Gate<F>>,
 }
@@ -47,6 +47,55 @@ impl<F: PrimeField> Gate<F> {
     }
 }
 
+// impl<F: PrimeField> Layer<F> {
+//     pub fn new(gates: Vec<Gate<F>>) -> Self {
+//         Self { gates }
+//     }
+
+//     fn get_output_values(&self) -> Vec<F> {
+//         self.gates.iter().map(|gate| gate.output_val).collect()
+//     }
+
+
+//     fn get_indicator_poly(&self, op: Operator) -> Vec<u8> {
+//         let n_bits = self.get_bits_for_gates();
+//         let layer_size = 1 << n_bits;
+//         let mut poly_eval = vec![0; layer_size];
+
+//         let gate_indices = self.gate_to_bits();
+//         for (gate_index, gate) in gate_indices.into_iter().zip(&self.gates) {
+//             if gate.operator == op {
+//                 poly_eval[gate_index] = 1;
+//             }
+//         }
+//         poly_eval
+//     }
+
+
+//     fn get_bits_for_gates(&self) -> u32 {
+//         let n_gates = self.gates.len();
+//         assert!(n_gates > 0, "There must be at least one gate in the layer.");
+
+//         if n_gates == 1 {
+//             3 
+//         } else {
+//             let n_gates_log = n_gates.ilog2();
+//             let n_bits = n_gates_log + 1;
+//             n_gates_log + (n_bits * 2)
+//         }
+//     }
+
+
+//     fn gate_to_bits(&self) -> Vec<usize> {
+//         self.gates
+//             .iter()
+//             .enumerate()
+//             .map(|(i, _)| 5 * i + 1) 
+//             .collect()
+//     }
+// }
+
+
 impl<F: PrimeField> Layer<F> {
     pub fn new(gates: Vec<Gate<F>>) -> Self {
         Self { gates }
@@ -56,6 +105,10 @@ impl<F: PrimeField> Layer<F> {
         self.gates.iter().map(|gate| gate.output_val).collect()
     }
 
+    // New method to get gates based on operator
+    pub fn get_add_mul_i(&self, op: Operator) -> Vec<&Gate<F>> {
+        self.gates.iter().filter(|gate| gate.operator == op).collect()
+    }
 
     fn get_indicator_poly(&self, op: Operator) -> Vec<u8> {
         let n_bits = self.get_bits_for_gates();
@@ -71,7 +124,6 @@ impl<F: PrimeField> Layer<F> {
         poly_eval
     }
 
-
     fn get_bits_for_gates(&self) -> u32 {
         let n_gates = self.gates.len();
         assert!(n_gates > 0, "There must be at least one gate in the layer.");
@@ -85,7 +137,6 @@ impl<F: PrimeField> Layer<F> {
         }
     }
 
-
     fn gate_to_bits(&self) -> Vec<usize> {
         self.gates
             .iter()
@@ -94,6 +145,7 @@ impl<F: PrimeField> Layer<F> {
             .collect()
     }
 }
+
 
 
 impl<F: PrimeField> Circuit<F> {
