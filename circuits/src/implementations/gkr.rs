@@ -1,239 +1,410 @@
-// use ark_bn254::Fq;
-// use crate::implementations::Circuit::{Circuit, Operator};
+use ark_bn254::Fq;
+use crate::implementations::circuit::{Circuit, Operator};
 
-// use crate::implementations::fiat_shamir::{verify};
-// use crate::implementations::transcript::Transcript;
-// use crate::implementations::multilinear_polynomial::MultilinearPoly;
+use crate::implementations::transcript::Transcript;
+use crate::implementations::multilinear_polynomial::MultilinearPoly;
+use super::circuit::Layers;
+use super::composed_poly::{ProductPoly, SumPoly};
+use super::sumcheck::{gkr_prove, gkr_verify};
+use super::transcript::fq_vec_to_bytes;
+use super::univariate_poly::UnivariatePoly;
 
-// use super::composed_poly::SumPoly;
-// // use sum_check::sum_check_protocol::{gkr_prove, gkr_verify};
-// pub struct Proof {
-//     output_poly: MultilinearPoly<Fq>,
-//     claimed_sum: Fq,
-//     proof_polynomials: Vec<Vec<Vec<Fq>>>,
-//     claimed_evaluations: Vec<(Fq, Fq)>,
-// }
+pub struct Proof {
+    output_poly: MultilinearPoly<Fq>,
+    proof_polynomials: Vec<Vec<UnivariatePoly<Fq>>>,
+    claimed_evaluations: Vec<(Fq, Fq)>,
+}
 
-// pub fn prove(circuit: &mut Circuit<Fq>, inputs: Vec<Fq>) -> Proof {
-//     let mut transcript = Transcript::<Fq>::init();
 
-//     let mut circuit_evaluations = circuit.evaluate(inputs);
+pub fn prove(circuit: &mut Circuit<Fq>, inputs: Vec<Fq>) -> Proof {
+    let mut transcript = Transcript::<Fq>::init();
 
-//     let mut w_0 = circuit_evaluations.last().unwrap().to_vec();
+    let mut circuit_evaluations = circuit.evaluate_circuit(inputs.clone());
 
-//     if w_0.len() == 1 {
-//         w_0.push(Fq::from(0));
-//     }
+    let mut w_0 = circuit_evaluations.last().unwrap().clone();
 
-//     let output_poly = MultilinearPoly::new(w_0);
+    if w_0.len() == 1 {
+        w_0.push(Fq::from(0));
+    }
 
-//     let (m_0, r_c) = initiate_protocol(&mut transcript, &output_poly);
+    let output_poly = MultilinearPoly::new(w_0);
 
-//     let claimed_sum = m_0;
+let (mut claimed_sum, mut random_challenge) = initiate_protocol(&mut transcript, &output_poly);
 
-//     let mut random_challenge = r_c;
 
-//     let num_rounds = 2;
-//     let mut proof_polys = Vec::with_capacity(num_rounds);
-//     let mut claimed_evaluations: Vec<(Fq, Fq)> = Vec::new();
+    let num_rounds = circuit.layers.len();
+    let mut proof_polys = Vec::with_capacity(num_rounds);
+    let mut claimed_evaluations: Vec<(Fq, Fq)> = Vec::new();
 
-//     let mut current_alpha = Fq::from(0);
-//     let mut current_beta = Fq::from(0);
-//     let mut current_rb = Fq::from(0);
-//     let mut current_rc = Fq::from(0);
+    let mut current_alpha = Fq::from(0);
+    let mut current_beta = Fq::from(0);
+    let mut current_rb: Vec<Fq> = Vec::new();
+    let mut current_rc: Vec<Fq> = Vec::new();
 
-//     circuit_evaluations.reverse();
+    circuit_evaluations.reverse();
 
-//     for idx in 0..circuit.layers.len() {
-//         let mut layers = circuit.layers.clone();
-//         layers.reverse();
+        let mut layers = circuit.layers.clone();
+    layers.reverse();
 
-//         let add_i = layers[idx].get_add_mul_i(Operator::Add);
-//         let mul_i = layers[idx].get_add_mul_i(Operator::Mul);
+     for (idx, layer) in layers.into_iter().enumerate() {
+        let w_i = if idx == num_rounds - 1 {
+            inputs.to_vec()
+        } else {
+            circuit_evaluations[idx + 1].clone()
+        };
 
-//         let w_i = if idx + 1 < circuit.layers.len() {
-//             circuit_evaluations[idx + 1].clone()
-//         } else {
-//             inputs.clone()
-//         };
+        let fbc_poly = if idx == 0 {
+            get_fbc_poly(random_challenge, layer, &w_i, &w_i)
+        } else {
+            get_merged_fbc_poly(layer, &w_i, &w_i, &current_rb, &current_rc, current_alpha, current_beta)
+        };
+     
+        let sum_check_proof = gkr_prove(claimed_sum, &fbc_poly, &mut transcript);
 
-//         let fbc_poly: SumPoly<Fq> = if idx == 0 {
-//             get_fbc_poly(random_challenge, add_i, mul_i, &w_i, &w_i)
-//             ////! ////////////correct up to here
-//         } else {
-//             ////! this throws the error
-//             get_merged_fbc_poly(
-//                 add_i,
-//                 mul_i,
-//                 &w_i,
-//                 &w_i,
-//                 current_rb,
-//                 current_rc,
-//                 current_alpha,
-//                 current_beta,
-//             )
-//         };
+        proof_polys.push(
+            sum_check_proof.proof_polynomials
+                .into_iter()
+                .map(|vec| UnivariatePoly::new(vec))
+                .collect()
+        );
 
-//         let sum_check_proof = gkr_prove(claimed_sum, &fbc_poly, &mut transcript);
+        let random_challenges: Vec<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FqConfig, 4>, 4>> = sum_check_proof.random_challenges;
 
-//         proof_polys.push(sum_check_proof.proof_polynomials);
+        let (r_b, r_c) = random_challenges.split_at(random_challenges.len() / 2);
 
-//         let next_poly = MultilinearPoly::new(w_i);
+        let o_1 = MultilinearPoly::new(w_i.clone()).full_evaluation(r_b.to_vec());
+        let o_2 = MultilinearPoly::new(w_i.clone()).full_evaluation(r_c.to_vec());
 
-//         let o_1 = next_poly.evaluate(vec![sum_check_proof.random_challenges[0]]);
-//         let o_2 = next_poly.evaluate(vec![sum_check_proof.random_challenges[1]]);
+        current_rb = r_b.to_vec();
+        current_rc = r_c.to_vec();
 
-//         current_rb = o_1;
-//         current_rc = o_2;
+        transcript.absorb(&fq_vec_to_bytes(&[o_1]));
+        current_alpha = transcript.squeeze();
 
-//         transcript.append(&fq_vec_to_bytes(&[o_1]));
-//         current_alpha = transcript.get_random_challenge();
+        transcript.absorb(&fq_vec_to_bytes(&[o_2]));
+        current_beta = transcript.squeeze();
 
-//         transcript.append(&fq_vec_to_bytes(&[o_2]));
-//         current_beta = transcript.get_random_challenge();
+        claimed_evaluations.push((o_1, o_2));
 
-//         claimed_evaluations.push((o_1, o_2));
+        random_challenge = transcript.squeeze();
+    }
 
-//         random_challenge = transcript.get_random_challenge();
-//     }
+    Proof {
+        output_poly,
+        proof_polynomials: proof_polys,
+        claimed_evaluations,
+    }
+}
 
-//     Proof {
-//         output_poly,
-//         claimed_sum: m_0,
-//         proof_polynomials: proof_polys,
-//         claimed_evaluations,
-//     }
-// }
+pub fn verify(proof: Proof, mut circuit: Circuit<Fq>, inputs: &[Fq]) -> bool {
+    let mut transcript = Transcript::<Fq>::init();
 
-// fn verify(proof: Proof, circuit: Circuit<Fq>) -> bool {
-//     let mut transcript = Transcript::<Fq>::init(); // Changed to init()
-    
-//     initiate_protocol(&mut transcript, &proof.output_poly);
+    let (mut current_claim, init_random_challenge) =
+        initiate_protocol(&mut transcript, &proof.output_poly);
 
-//     let mut current_claim = proof.claimed_sum;
+    let mut alpha = Fq::from(0);
+    let mut beta = Fq::from(0);
+    let mut prev_sumcheck_random_challenges = Vec::new();
 
-//     for i in 0..circuit.layers.len() {
-//         let sum_check_verify = gkr_verify(
-//             proof.proof_polynomials[i].clone(),
-//             current_claim,
-//             transcript.clone(),
-//         );
+    circuit.layers.reverse();
+    let num_layers = circuit.layers.len();
 
-//         if !sum_check_verify.verified {
-//             return false;
-//         }
+    for (i, layer) in circuit.layers.iter().enumerate() {
+        let sum_check_verify = gkr_verify(
+            proof.proof_polynomials[i].clone(),
+            current_claim,
+            &mut transcript,
+        );
 
-//         current_claim = sum_check_verify.final_claimed_sum;
+        if !sum_check_verify.verified {
+            return false;
+        }
 
-//         let add_i = circuit.layers[i].get_add_mul_i(Operator::Add);
-//         let mul_i = circuit.layers[i].get_add_mul_i(Operator::Mul);
+        let current_random_challenge = sum_check_verify.random_challenges;
 
-//         let (o_1, o_2) = proof.claimed_evaluations[i];
+        let (o_1, o_2) = if i == num_layers - 1 {
+            evaluate_input_poly(inputs, &current_random_challenge)
+        } else {
+            proof.claimed_evaluations[i]
+        };
 
-//         transcript.append(&fq_vec_to_bytes(&[o_1]));
-//         let alpha = transcript.get_random_challenge();
+        let expected_claim = if i == 0 {
+            get_verifier_claim(
+                layer,
+                init_random_challenge,
+                &current_random_challenge,
+                o_1,
+                o_2,
+            )
+        } else {
+            get_merged_verifier_claim(
+                layer,
+                &current_random_challenge,
+                &prev_sumcheck_random_challenges,
+                o_1,
+                o_2,
+                alpha,
+                beta,
+            )
+        };
 
-//         transcript.append(&fq_vec_to_bytes(&[o_2]));
-//         let beta = transcript.get_random_challenge();
+        if expected_claim != sum_check_verify.final_claimed_sum {
+            return false;
+        }
 
-//         if i > 0 {
-//             current_claim *= alpha * o_1 + beta * o_2; // Update claim based on alpha and beta
-//         }
-        
-//         // Check if the next layer claim matches
-//         if !((add_i.evaluate(vec![o_1, o_2]) + mul_i.evaluate(vec![o_1 * o_2])) == current_claim) {
-//             return false;
-//         }
-//     }
+        prev_sumcheck_random_challenges = current_random_challenge;
 
-//     true
-// }
+        transcript.absorb(&fq_vec_to_bytes(&[o_1]));
+        alpha = transcript.squeeze();
 
-// fn initiate_protocol(
-//     transcript: &mut Transcript<Fq>,
-//     output_poly: &MultilinearPoly<Fq>,
-// ) -> (Fq, Fq) {
-//     transcript.append(&fq_vec_to_bytes(&output_poly.evaluation));
+        transcript.absorb(&fq_vec_to_bytes(&[o_2]));
+        beta = transcript.squeeze();
 
-//     let random_challenge = transcript.get_random_challenge();
+        current_claim = (alpha * o_1) + (beta * o_2);
+    }
 
-//     let m_0 = output_poly.evaluate(vec![random_challenge]);
+    true
+}
 
-//     transcript.append(&fq_vec_to_bytes(&[m_0]));
 
-//     (m_0, random_challenge)
-// }
+fn initiate_protocol(
+    transcript: &mut Transcript<Fq>,
+    output_poly: &MultilinearPoly<Fq>,
+) -> (Fq, Fq) {
+    transcript.absorb(&fq_vec_to_bytes(&output_poly.evaluation));
 
-// fn add_mul_polynomials(poly_a: &[Fq], poly_b: &[Fq], op: Operation) -> MultilinearPoly<Fq> {
-//     let new_eval_len = poly_a.len() * poly_b.len();
-//     let mut new_eval = Vec::with_capacity(new_eval_len);
+    let random_challenge = transcript.squeeze();
 
-//     for a in poly_a {
-//         for b in poly_b {
-//             new_eval.push(op.apply(*a, *b))
-//         }
-//     }
+    let m_0 = output_poly.full_evaluation(vec![random_challenge]);
 
-//     MultilinearPoly::new(new_eval)
-// }
+    transcript.absorb(&fq_vec_to_bytes(&[m_0]));
 
-// ////! verified as correct
-// fn get_fbc_poly(
-//     random_challenge: Fq,
-//     add_i: MultilinearPoly<Fq>,
-//     mul_i: MultilinearPoly<Fq>,
-//     w_b: &[Fq],
-//     w_c: &[Fq],
-// ) -> SumPoly<Fq> {
-//     let new_add_i = add_i.partial_evaluate(0, &random_challenge);
-//     let new_mul_i = mul_i.partial_evaluate(0, &random_challenge);
+    (m_0, random_challenge)
+}
 
-//     let summed_w_poly = add_mul_polynomials(w_b, w_c, Operator::Add);
-//     let multiplied_w_poly = add_mul_polynomials(w_b, w_c, Operator::Mul);
+fn tensor_add_mul_polynomials(poly_a: &[Fq], poly_b: &[Fq], op: Operator) -> MultilinearPoly<Fq> {
+    let new_eval: Vec<Fq> = poly_a
+        .iter()
+        .flat_map(|a| poly_b.iter().map(move |b| op.use_operation(*a, *b)))
+        .collect();
 
-//     let add_w_eval = vec![new_add_i.evaluation, summed_w_poly.evaluation];
-//     let mul_w_eval = vec![new_mul_i.evaluation, multiplied_w_poly.evaluation];
+    MultilinearPoly::new(new_eval)
+}
 
-//     let add_eval_product = ProductPoly::new(add_w_eval);
-//     let mul_eval_product = ProductPoly::new(mul_w_eval);
 
-//     SumPoly::new(vec![add_eval_product, mul_eval_product])
-// }
 
-// fn get_merged_fbc_poly(
-//     add_i: MultilinearPoly<Fq>,
-//     mul_i: MultilinearPoly<Fq>,
-//     w_b: &[Fq],
-//     w_c: &[Fq],
-//     r_b: Fq,
-//     r_c: Fq,
-//     alpha: Fq,
-//     beta: Fq,
-// ) -> SumPoly<Fq> {
-//     let add_i_rb = add_i.partial_evaluate(0, &r_b).scale(alpha);
+pub fn get_fbc_poly(random_challenge: Fq, layer: Layers<Fq>, w_b: &[Fq], w_c: &[Fq]) -> SumPoly<Fq> {
+    let add_i = layer
+        .get_add_mul_i(Operator::Add)
+        .partial_evaluate(0, &random_challenge);
+    let mul_i = layer
+        .get_add_mul_i(Operator::Mul)
+        .partial_evaluate(0, &random_challenge);
 
-//     let add_i_rc = add_i.partial_evaluate(0, &r_c).scale(beta);
+    let summed_w_poly = tensor_add_mul_polynomials(w_b, w_c, Operator::Add);
+    let multiplied_w_poly = tensor_add_mul_polynomials(w_b, w_c, Operator::Mul);
 
-//     let mul_i_rb = mul_i.partial_evaluate(0, &r_b).scale(alpha);
+    let add_eval_product = ProductPoly::new(vec![add_i.evaluation, summed_w_poly.evaluation]);
+    let mul_eval_product = ProductPoly::new(vec![mul_i.evaluation, multiplied_w_poly.evaluation]);
 
-//     let mul_i_rc = mul_i.partial_evaluate(0, &r_c).scale(beta);
+    SumPoly::new(vec![add_eval_product, mul_eval_product])
+}
 
-//     let summed_w_poly = add_mul_polynomials(w_b, w_c, Operation::Add);
-//     let multiplied_w_poly = add_mul_polynomials(w_b, w_c, Operation::Mul);
+fn get_merged_fbc_poly(
+    layer: Layers<Fq>,
+    w_b: &[Fq],
+    w_c: &[Fq],
+    r_b: &[Fq],
+    r_c: &[Fq],
+    alpha: Fq,
+    beta: Fq,
+) -> SumPoly<Fq> {
+    let add_i = layer.get_add_mul_i(Operator::Add);
+    let mul_i = layer.get_add_mul_i(Operator::Mul);
 
-//     let summed_add_i = add_i_rb + add_i_rc;
+    let summed_add_i = add_i.multi_partial_evaluate(r_b).scale(alpha)
+        + add_i.multi_partial_evaluate(r_c).scale(beta);
 
-//     let summed_mul_i = mul_i_rb + mul_i_rc;
+    let summed_mul_i = mul_i.multi_partial_evaluate(r_b).scale(alpha)
+        + mul_i.multi_partial_evaluate(r_c).scale(beta);
 
-//     let add_product_poly = ProductPoly::new(vec![
-//         summed_add_i.evaluation,
-//         summed_w_poly.evaluation.clone(),
-//     ]);
+    let summed_w_poly = tensor_add_mul_polynomials(w_b, w_c, Operator::Add);
+    let multiplied_w_poly = tensor_add_mul_polynomials(w_b, w_c, Operator::Mul);
 
-//     let mul_product_poly = ProductPoly::new(vec![
-//         summed_mul_i.evaluation,
-//         multiplied_w_poly.evaluation.clone(),
-//     ]);
+    let add_product_poly =
+        ProductPoly::new(vec![summed_add_i.evaluation, summed_w_poly.evaluation]);
+    let mul_product_poly =
+        ProductPoly::new(vec![summed_mul_i.evaluation, multiplied_w_poly.evaluation]);
 
-//     SumPoly::new(vec![add_product_poly, mul_product_poly])
-// }
+    SumPoly::new(vec![add_product_poly, mul_product_poly])
+}
+
+fn get_verifier_claim(
+    layer: &Layers<Fq>,
+    init_random_challenge: Fq,
+    sumcheck_random_challenges: &[Fq],
+    o_1: Fq,
+    o_2: Fq,
+) -> Fq {
+    let (r_b, r_c) = sumcheck_random_challenges.split_at(sumcheck_random_challenges.len() / 2);
+    let mut all_random_challenges = Vec::with_capacity(1 + r_b.len() + r_c.len());
+    all_random_challenges.push(init_random_challenge);
+    all_random_challenges.extend_from_slice(r_b);
+    all_random_challenges.extend_from_slice(r_c);
+
+    let a_r = layer
+        .get_add_mul_i(Operator::Add)
+        .full_evaluation(all_random_challenges.clone());
+    let m_r = layer
+        .get_add_mul_i(Operator::Mul)
+        .full_evaluation(all_random_challenges);
+    (a_r * (o_1 + o_2)) + (m_r * (o_1 * o_2))
+}
+
+fn get_merged_verifier_claim(
+    layer: &Layers<Fq>,
+    current_random_challenge: &[Fq],
+    previous_random_challenge: &[Fq],
+    o_1: Fq,
+    o_2: Fq,
+    alpha: Fq,
+    beta: Fq,
+) -> Fq {
+    let (prev_r_b, prev_r_c) =
+        previous_random_challenge.split_at(previous_random_challenge.len() / 2);
+
+    let add_i = layer.get_add_mul_i(Operator::Add);
+    let mul_i = layer.get_add_mul_i(Operator::Mul);
+
+    let summed_add_i = add_i.multi_partial_evaluate(prev_r_b).scale(alpha)
+        + add_i.multi_partial_evaluate(prev_r_c).scale(beta);
+
+    let summed_mul_i = mul_i.multi_partial_evaluate(prev_r_b).scale(alpha)
+        + mul_i.multi_partial_evaluate(prev_r_c).scale(beta);
+
+    let a_r = summed_add_i.full_evaluation(current_random_challenge.to_vec());
+    let m_r = summed_mul_i.full_evaluation(current_random_challenge.to_vec());
+
+    (a_r * (o_1 + o_2)) + (m_r * (o_1 * o_2))
+}
+
+fn evaluate_input_poly(inputs: &[Fq], sumcheck_random_challenges: &[Fq]) -> (Fq, Fq) {
+    let input_poly = MultilinearPoly::new(inputs.to_vec());
+
+    let (r_b, r_c) = sumcheck_random_challenges.split_at(sumcheck_random_challenges.len() / 2);
+
+    let o_1 = input_poly.full_evaluation(r_b.to_vec());
+    let o_2 = input_poly.full_evaluation(r_c.to_vec());
+
+    (o_1, o_2)
+}
+
+
+
+#[cfg(test)]
+mod test {
+    use ark_bn254::Fq;
+    use super::{
+        get_fbc_poly, get_merged_fbc_poly, prove, tensor_add_mul_polynomials, verify, Proof,
+    };
+    use crate::implementations::{circuit::{Circuit, Gates, Layers, Operator}, multilinear_polynomial, univariate_poly};
+    use crate::implementations::multilinear_polynomial::MultilinearPoly;
+    use crate::implementations::univariate_poly::UnivariatePoly;
+    use crate::implementations::composed_poly::{ProductPoly, SumPoly};
+
+
+    #[test]
+    fn it_add_polys_correctly() {
+        let poly_a = &[Fq::from(0), Fq::from(2)];
+        let poly_b = &[Fq::from(0), Fq::from(3)];
+
+        let expected_poly = vec![Fq::from(0), Fq::from(3), Fq::from(2), Fq::from(5)];
+
+        let result = tensor_add_mul_polynomials(poly_a, poly_b, Operator::Add);
+
+        assert_eq!(result.evaluation, expected_poly);
+
+        let poly_a = &[Fq::from(0), Fq::from(3)];
+        let poly_b = &[Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(2)];
+
+        let expected_poly = vec![
+            Fq::from(0),
+            Fq::from(0),
+            Fq::from(0),
+            Fq::from(2),
+            Fq::from(3),
+            Fq::from(3),
+            Fq::from(3),
+            Fq::from(5),
+        ];
+
+        let result = tensor_add_mul_polynomials(poly_a, poly_b, Operator::Add);
+
+        assert_eq!(result.evaluation, expected_poly);
+    }
+
+    #[test]
+    fn it_multiplies_polys_correctly() {
+        let poly_a = &[Fq::from(0), Fq::from(2)];
+        let poly_b = &[Fq::from(0), Fq::from(3)];
+
+        let expected_poly = vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(6)];
+
+        let result = tensor_add_mul_polynomials(poly_a, poly_b, Operator::Mul);
+
+        assert_eq!(result.evaluation, expected_poly);
+
+        let poly_a = &[Fq::from(0), Fq::from(3)];
+        let poly_b = &[Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(2)];
+
+        let expected_poly = vec![
+            Fq::from(0),
+            Fq::from(0),
+            Fq::from(0),
+            Fq::from(0),
+            Fq::from(0),
+            Fq::from(0),
+            Fq::from(0),
+            Fq::from(6),
+        ];
+
+        let result = tensor_add_mul_polynomials(poly_a, poly_b, Operator::Mul);
+
+        assert_eq!(result.evaluation, expected_poly);
+    }
+
+    #[test]
+    fn test_get_fbc_poly() {
+        let gate = Gates::new_gate(Fq::from(2), Fq::from(14), Operator::Add);
+
+        let layer = Layers::new_layer(vec![gate]);
+
+        let r_c = Fq::from(5);
+
+        let w_1_poly = &[Fq::from(2), Fq::from(12)];
+
+        let add_i_r =
+            MultilinearPoly::new(vec![Fq::from(0), Fq::from(-4), Fq::from(0), Fq::from(0)]);
+
+        let mul_i_r = MultilinearPoly::new(vec![Fq::from(0); 4]);
+
+        let fbc_poly = get_fbc_poly(r_c, layer, w_1_poly, w_1_poly);
+
+        let one = ProductPoly::new(vec![
+            add_i_r.evaluation,
+            vec![Fq::from(4), Fq::from(14), Fq::from(14), Fq::from(24)],
+        ]);
+
+        let two = ProductPoly::new(vec![
+            mul_i_r.evaluation,
+            vec![Fq::from(4), Fq::from(24), Fq::from(24), Fq::from(144)],
+        ]);
+
+        let expected_result = SumPoly::new(vec![one, two]);
+
+        assert_eq!(fbc_poly.polys, expected_result.polys);
+    }
+
+
+}
+

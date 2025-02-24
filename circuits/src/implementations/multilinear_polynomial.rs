@@ -26,6 +26,16 @@ impl<F: PrimeField> MultilinearPoly<F> {
             number_of_variables,
         }
     }
+    
+    pub fn multi_partial_evaluate(&self, values: &[F]) -> Self {
+            let mut poly = self.clone();
+    
+            for value in values {
+                poly = poly.partial_evaluate(0, value);
+            }
+    
+            poly
+        }
 
     fn pair_points(bit: usize, number_of_variables: usize) -> Vec<(usize, usize)> {
         let mut result = vec![];
@@ -87,6 +97,13 @@ impl<F: PrimeField> MultilinearPoly<F> {
 
         result.evaluation[0]
     }
+
+    pub fn scale(&self, value: F) -> Self {
+        let result = self.evaluation.iter().map(|eval| *eval * value).collect();
+
+        Self::new(result)
+    }
+    
 }
 
 impl<F: PrimeField> Add for MultilinearPoly<F> {
@@ -133,6 +150,7 @@ fn insert_bit(value: usize, bit: usize) -> usize {
 
     high << (bit + 1) | low
 }
+
 
 #[cfg(test)]
 mod tests {
