@@ -2,6 +2,18 @@ use ark_ff::PrimeField;
 
 use crate::implementations::multilinear_polynomial::MultilinearPoly;
 
+// implementation of my composite poly
+// composite fbc poly = ProductPoly[add(b,c), w_add(b,c)] 
+// composite fbc poly = ProductPoly[add(b,c), w_add(b,c)] 
+
+// [ ]  w(b) + w(c) → w_add(b, c)
+// [ ]  w(b) * w(c) → w_mul(b, c)
+// [ ]  ProductPoly[add(b,c), w_add(b,c)]
+// [ ]  ProductPoly[mul(b, c), w_mul(b,c)]
+
+// sumpoly = ProductPoly[add(b,c), w_add(b,c)] + ProductPoly[mul(b, c), w_mul(b,c)]
+
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProductPoly<F: PrimeField> {
     pub evaluation: Vec<MultilinearPoly<F>>,
@@ -13,14 +25,14 @@ pub struct SumPoly<F: PrimeField> {
 }
 
 impl<F: PrimeField> ProductPoly<F> {
-    pub fn new(evaluations: Vec<Vec<F>>) -> Self {
-        let length_1 = evaluations[0].len();
+    pub fn init_poly(poly_evals: Vec<Vec<F>>) -> Self {
+        let poly_length = poly_evals[0].len();
 
-        if evaluations.iter().any(|eval| eval.len() != length_1) {
-            panic!("all evaluations must have same length");
+        if poly_evals.iter().any(|eval| eval.len() != poly_length) {
+            panic!("all poly_evals must have same length");
         }
 
-        let polys = evaluations
+        let polys = poly_evals
             .iter()
             .map(|evaluation| MultilinearPoly::new(evaluation.to_vec()))
             .collect();
@@ -46,7 +58,7 @@ impl<F: PrimeField> ProductPoly<F> {
             })
             .collect();
 
-        Self::new(partial_polys)
+        Self::init_poly(partial_polys)
     }
 
     fn reduce(&self) -> Vec<F> {
@@ -60,8 +72,8 @@ impl<F: PrimeField> ProductPoly<F> {
 
 impl<F: PrimeField> SumPoly<F> {
     pub fn new(polys: Vec<ProductPoly<F>>) -> Self {
-        let degree_1 = polys[0].get_degree();
-        if polys.iter().any(|poly| poly.get_degree() != degree_1) {
+        let poly_length = polys[0].get_degree();
+        if polys.iter().any(|poly| poly.get_degree() != poly_length) {
             panic!("all product polys must have same degree");
         }
 
@@ -111,12 +123,12 @@ mod test {
 
     #[test]
     fn product_poly_evaluates_multiple_polys() {
-        let evaluations = vec![
+        let poly_evals = vec![
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3)],
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(2)],
         ];
 
-        let product_polys = ProductPoly::new(evaluations);
+        let product_polys = ProductPoly::init_poly(poly_evals);
 
         let values = vec![Fq::from(2), Fq::from(3)];
 
@@ -129,12 +141,12 @@ mod test {
 
     #[test]
     fn product_poly_partially_evaluates_multiple_polys() {
-        let evaluations = vec![
+        let poly_evals = vec![
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3)],
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(2)],
         ];
 
-        let product_polys = ProductPoly::new(evaluations);
+        let product_polys = ProductPoly::init_poly(poly_evals);
 
         let value = Fq::from(2);
 
@@ -157,7 +169,7 @@ mod test {
     #[test]
     #[should_panic]
     fn product_poly_doesnt_allow_different_evaluation_size() {
-        let evaluations = vec![
+        let poly_evals = vec![
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3)],
             vec![
                 Fq::from(0),
@@ -171,7 +183,7 @@ mod test {
             ],
         ];
 
-        let _ = ProductPoly::new(evaluations);
+        let _ = ProductPoly::init_poly(poly_evals);
     }
 
     #[test]
@@ -182,18 +194,18 @@ mod test {
 
     #[test]
     fn sum_poly_evaluates_properly() {
-        let evaluations_1 = vec![
+        let poly_evals_1 = vec![
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3)],
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(2)],
         ];
 
-        let evaluations_2 = vec![
+        let poly_evals_2 = vec![
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(4)],
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(5)],
         ];
 
-        let product_poly_1 = ProductPoly::new(evaluations_1);
-        let product_poly_2 = ProductPoly::new(evaluations_2);
+        let product_poly_1 = ProductPoly::init_poly(poly_evals_1);
+        let product_poly_2 = ProductPoly::init_poly(poly_evals_2);
 
         let sum_poly = SumPoly::new(vec![product_poly_1, product_poly_2]);
 
@@ -208,18 +220,18 @@ mod test {
 
     #[test]
     fn sum_poly_partially_evaluates_properly() {
-        let evaluations_1 = vec![
+        let poly_evals_1 = vec![
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3)],
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(2)],
         ];
 
-        let evaluations_2 = vec![
+        let poly_evals_2 = vec![
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(4)],
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(5)],
         ];
 
-        let product_poly_1 = ProductPoly::new(evaluations_1);
-        let product_poly_2 = ProductPoly::new(evaluations_2);
+        let product_poly_1 = ProductPoly::init_poly(poly_evals_1);
+        let product_poly_2 = ProductPoly::init_poly(poly_evals_2);
 
         let value = Fq::from(2);
 

@@ -129,7 +129,7 @@ pub fn to_bytes(values: &[Fq]) -> Vec<u8> {
 }
 
 
-pub fn gkr_prove(
+pub fn generate_sumcheck_proof(
     claimed_sum: Fq,
     composed_polynomial: &SumPoly<Fq>,
     transcript: &mut Transcript<Fq>,
@@ -158,7 +158,9 @@ pub fn gkr_prove(
         claimed_sum,
     }
 }
-pub fn gkr_verify(
+
+// 
+pub fn verify_sumcheck_proof(
     round_polys: Vec<UnivariatePoly<Fq>>,
     mut claimed_sum: Fq,
     transcript: &mut Transcript<Fq>,

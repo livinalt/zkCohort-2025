@@ -5,6 +5,8 @@ use std::{marker::PhantomData};
 use super::multilinear_polynomial::MultilinearPoly;
 
 
+
+// GATES STRUCT AND IMPLEMENTATION
 #[derive(Debug, Clone, Copy)]
 pub struct Gates<F:PrimeField>{
     pub input_left:F,
@@ -40,6 +42,7 @@ impl Operator {
     }    
 }
 
+// LAYER STRUCT AND IMPLEMENTATION
 #[derive(Debug, Clone)]
 pub struct Layers<F: PrimeField> {
     pub gates: Vec<Gates<F>>,
@@ -106,6 +109,7 @@ impl<F: PrimeField> Layers<F> {
 }
 
 
+// CIRCUIT STRUCT AND IMPLEMENTATION
 
 // #[derive(Debug, Clone)]
 pub struct Circuit<F:PrimeField>{
