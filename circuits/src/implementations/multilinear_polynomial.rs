@@ -75,10 +75,10 @@ impl<F: PrimeField> MultilinearPoly<F> {
             panic!("Partial evaluation results in an empty vector!");
         }
 
-        println!(
-            "The partial evaluate result is = {}",
-            format!("{:?}", result)
-        );
+        // println!(
+        //     "The partial evaluate result is = {}",
+        //     format!("{:?}", result)
+        // );
 
         Self::new(result)
     }

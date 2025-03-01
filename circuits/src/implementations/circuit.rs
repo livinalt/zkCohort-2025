@@ -80,29 +80,22 @@ impl<F: PrimeField> Layers<F> {
     // if we have one gate, then the number of bits ==> (abc) == (000)
     // if we have two gates, then the number of bits ==> (abbcc) == (0,00,00)
     // if we have three gates, then the number of bits ==> (aabbbccc) == (00,000,000)
-    fn get_no_bits_of_gates(&self) -> u32{
+    fn get_no_bits_of_gates(&self) -> u32 {
         let number_of_gates = self.gates.len();
-
-
-        if number_of_gates == 1{
-            return 3;
+        if number_of_gates == 0 {
+            return 0;
         }
-
-        else{
-            let number_of_bits_of_gates = number_of_gates.ilog2();
-
-            let number_of_gates_log = number_of_bits_of_gates.ilog2();
-            let number_of_bits = number_of_gates_log + 1;
-            return number_of_gates_log + (number_of_bits * 2);
-          };
+        (number_of_gates as f64).log2().ceil() as u32
     }
 
 
+
     pub fn gate_to_bits(&self) -> Vec<usize> {
+        let n_bits = self.get_no_bits_of_gates();
         self.gates
             .iter()
             .enumerate()
-            .map(|(i, _)| 5 * i + 1) 
+            .map(|(i, _)| i % (1 << n_bits))
             .collect()
     }
 
@@ -110,7 +103,6 @@ impl<F: PrimeField> Layers<F> {
 
 
 // CIRCUIT STRUCT AND IMPLEMENTATION
-
 // #[derive(Debug, Clone)]
 pub struct Circuit<F:PrimeField>{
     pub layers:Vec<Layers<F>>,
@@ -121,15 +113,14 @@ impl<F: PrimeField> Circuit<F> {
         Self { layers }
     }
 
-    pub fn evaluate_circuit(&self, inputs:Vec<F>) -> Vec<Vec<F>> {
-        
+    pub fn evaluate_circuit(&self, inputs: Vec<F>) -> Vec<Vec<F>> {
         let mut result: Vec<Vec<F>> = Vec::new();
         let mut current_inputs: Vec<F> = inputs;
 
         for layer in &self.layers {
             let mut layer_outputs: Vec<F> = Vec::new();
             for gate in &layer.gates {
-                let output_val = gate.operator.use_operation(gate.input_left, gate.input_left);
+                let output_val = gate.operator.use_operation(gate.input_left, gate.input_right);
                 layer_outputs.push(output_val);
             }
             result.push(layer_outputs.clone());
