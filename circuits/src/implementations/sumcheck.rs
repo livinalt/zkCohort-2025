@@ -167,7 +167,7 @@ pub fn verify_sumcheck_proof(
 ) -> GkrVerify {
     let mut random_challenges = Vec::new();
 
-    for round_poly in round_polys {
+    for (i, round_poly) in round_polys.iter().enumerate() {
         let f_b_0 = round_poly.evaluate(Fq::from(0));
         let f_b_1 = round_poly.evaluate(Fq::from(1));
 
@@ -178,6 +178,8 @@ pub fn verify_sumcheck_proof(
                 random_challenges: vec![Fq::from(0)],
             };
         }
+        println!("partial check on round {i} passed");
+
 
         transcript.absorb(&fq_vec_to_bytes(&round_poly.coefficient));
 
@@ -201,9 +203,13 @@ fn get_round_partial_polynomial_proof_gkr(composed_poly: &SumPoly<Fq>) -> Univar
     let mut poly_proof = Vec::with_capacity(degree + 1);
 
     for i in 0..=degree {
+
         let value = Fq::from(i as u64);
+
         let partial_poly = composed_poly.partial_evaluate(&value);
+
         let eval = partial_poly.reduce().iter().sum();
+
         poly_proof.push(eval);
     }
 
@@ -214,6 +220,7 @@ fn get_round_partial_polynomial_proof_gkr(composed_poly: &SumPoly<Fq>) -> Univar
         .collect();
 
     let (xs, ys): (Vec<_>, Vec<_>) = points.into_iter().unzip();
+
     let poly = UnivariatePoly::interpolate(xs, ys);
     
     poly
@@ -223,6 +230,7 @@ fn get_round_partial_polynomial_proof_gkr(composed_poly: &SumPoly<Fq>) -> Univar
 
 fn get_round_partial_polynomial_proof(polynomial: &[Fq]) -> Vec<Fq> {
     let mid_point = polynomial.len() / 2;
+    
     let (zeros, ones) = polynomial.split_at(mid_point);
 
     let poly_proof = vec![zeros.iter().sum(), ones.iter().sum()];

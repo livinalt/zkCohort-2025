@@ -1,12 +1,12 @@
-use ark_bn254::Fq;
-use crate::implementations::circuit::{Circuit, Operator};
-use crate::implementations::transcript::Transcript;
-use crate::implementations::multilinear_polynomial::MultilinearPoly;
 use super::circuit::Layers;
 use super::composed_poly::{ProductPoly, SumPoly};
 use super::sumcheck::{generate_sumcheck_proof, verify_sumcheck_proof};
 use super::transcript::fq_vec_to_bytes;
 use super::univariate_poly::UnivariatePoly;
+use crate::implementations::circuit::{Circuit, Operator};
+use crate::implementations::multilinear_polynomial::MultilinearPoly;
+use crate::implementations::transcript::Transcript;
+use ark_bn254::Fq;
 
 pub struct Proof {
     final_layer_poly: MultilinearPoly<Fq>,
@@ -15,35 +15,23 @@ pub struct Proof {
 }
 
 pub fn prove(circuit: &mut Circuit<Fq>, inputs: Vec<Fq>) -> Proof {
+
     let mut transcript = Transcript::<Fq>::init();
 
-    // Evaluate the circuit on the given inputs
     let mut circuit_evaluations = circuit.evaluate_circuit(inputs.clone());
 
-    println!("This is the Circuit Evaluation {:?}", circuit_evaluations);
-
-    // Handle the case where the final layer evaluation has a single value
     let mut w_0 = circuit_evaluations.last().unwrap().clone();
 
-    println!("This is the first Layer W_0 {:?}", w_0);
 
     if w_0.len() == 1 {
         w_0.push(Fq::from(0)); // Pad with zero to make length a power of two
     }
 
-        println!("After blowing up first Layer W_0 {:?}", w_0);
-
-
-        // ++++++++++++++++++++++++++++++++++++FAILING HERE WHERE MULTILINEAR IS CALLED ++++++++++++++++++++++++++++++++++++++++
-
-    // Create the output polynomial from the padded evaluation
     let output_poly = MultilinearPoly::new(w_0);
-    println!("This is the Output_pol Created {:?}", output_poly);
 
     // Initialize the sumcheck protocol
-    let (mut claimed_sum, random_challenge) = initialize_sumcheck_protocol(&mut transcript, &output_poly);
-
-    println!("This is the Claimed Sum {:?} and Random Challenge {:?}", claimed_sum, random_challenge);
+    let (mut claimed_sum, random_challenge) =
+        initialize_sumcheck_protocol(&mut transcript, &output_poly);
 
     let num_layers = circuit.layers.len();
     let mut proof_polynomials = Vec::with_capacity(num_layers);
@@ -53,39 +41,41 @@ pub fn prove(circuit: &mut Circuit<Fq>, inputs: Vec<Fq>) -> Proof {
     let mut alpha = Fq::from(0);
     let mut beta = Fq::from(0);
 
-    // println!("This is the Proof Polynomials {:?}", proof_polynomials);
-    // println!("This is the Number of Layers {:?}", num_layers);
-    // println!("This is the Claim Evaluations {:?}", claimed_evaluations);
-    // println!("This is the Circuit Layers {:?}", circuit.layers);
-    // println!("This is the Circuit Evaluations {:?}", circuit_evaluations);
-
     // Reverse the intermediate evaluations and layers for processing
     circuit_evaluations.reverse();
     let mut layers = circuit.layers.clone();
     layers.reverse();
 
-    // Process each layer
+    // Looping through the layers to processProcess each layer
     for (idx, layer) in layers.into_iter().enumerate() {
-        // Get the evaluation polynomial for the current layer
+        
         let w_i = if idx == num_layers - 1 {
-            inputs.to_vec() // For the input layer, use the inputs directly
+            inputs.to_vec() 
         } else {
-            circuit_evaluations[idx + 1].clone() 
+            circuit_evaluations[idx + 1].clone()
         };
 
         // Construct the sumcheck input polynomial
         let fbc_poly = if idx == 0 {
             construct_sumcheck_input_polynomial(random_challenge, layer, &w_i, &w_i)
         } else {
-            construct_merged_sumcheck_input_polynomial(layer, &w_i, &w_i, &current_rb, &current_rc, alpha, beta)
+            construct_merged_sumcheck_input_polynomial(
+                layer,
+                &w_i,
+                &w_i,
+                &current_rb,
+                &current_rc,
+                alpha,
+                beta,
+            )
         };
 
-        // Generate the sumcheck proof for the current layer
+
         let sum_check_proof = generate_sumcheck_proof(claimed_sum, &fbc_poly, &mut transcript);
 
-        // Store the proof polynomials
         proof_polynomials.push(
-            sum_check_proof.proof_polynomials
+            sum_check_proof
+                .proof_polynomials
                 .into_iter()
                 .map(|vec| UnivariatePoly::new(vec))
                 .collect(),
@@ -102,7 +92,7 @@ pub fn prove(circuit: &mut Circuit<Fq>, inputs: Vec<Fq>) -> Proof {
             current_rb = r_b.to_vec();
             current_rc = r_c.to_vec();
 
-            // Update the transcript and challenges
+            // Update the transcript and random challenges
             transcript.absorb(&fq_vec_to_bytes(&[o_1]));
             alpha = transcript.squeeze();
 
@@ -115,12 +105,13 @@ pub fn prove(circuit: &mut Circuit<Fq>, inputs: Vec<Fq>) -> Proof {
         }
     }
 
-    // Return the proof
+
     Proof {
         final_layer_poly: output_poly,
         sumcheck_proof_evals: proof_polynomials,
         sumcheck_claimed_evals: claimed_evaluations,
     }
+    
 }
 
 pub fn verify(proof: Proof, mut circuit: Circuit<Fq>, inputs: &[Fq]) -> bool {
@@ -136,8 +127,11 @@ pub fn verify(proof: Proof, mut circuit: Circuit<Fq>, inputs: &[Fq]) -> bool {
     circuit.layers.reverse();
     let num_layers = circuit.layers.len();
 
+
     // Verify the sumcheck proof for the current layer
     for (layer_index, layer) in circuit.layers.iter().enumerate() {
+
+        println!("round {layer_index}");
         let sumcheck_verify = verify_sumcheck_proof(
             proof.sumcheck_proof_evals[layer_index].clone(),
             current_claim,
@@ -232,18 +226,23 @@ fn construct_sumcheck_input_polynomial(
     w_b: &[Fq],
     w_c: &[Fq],
 ) -> SumPoly<Fq> {
+
     let add_i = layer
         .get_add_mul_i(Operator::Add)
         .partial_evaluate(0, &random_challenge);
+
     let mul_i = layer
         .get_add_mul_i(Operator::Mul)
         .partial_evaluate(0, &random_challenge);
+
+
 
     let summed_w_poly = combine_polynomials_using_operators(w_b, w_c, Operator::Add);
     let multiplied_w_poly = combine_polynomials_using_operators(w_b, w_c, Operator::Mul);
 
     let add_eval_product = ProductPoly::init_poly(vec![add_i.evaluation, summed_w_poly.evaluation]);
-    let mul_eval_product = ProductPoly::init_poly(vec![mul_i.evaluation, multiplied_w_poly.evaluation]);
+    let mul_eval_product =
+        ProductPoly::init_poly(vec![mul_i.evaluation, multiplied_w_poly.evaluation]);
 
     SumPoly::new(vec![add_eval_product, mul_eval_product])
 }
@@ -327,6 +326,7 @@ fn compute_merged_verifier_claim(
 }
 
 fn evaluate_input_layer_polynomial(inputs: &[Fq], sumcheck_random_challenges: &[Fq]) -> (Fq, Fq) {
+    println!("checkkkk");
     let input_poly = MultilinearPoly::new(inputs.to_vec());
 
     let (r_b, r_c) = sumcheck_random_challenges.split_at(sumcheck_random_challenges.len() / 2);
@@ -337,16 +337,11 @@ fn evaluate_input_layer_polynomial(inputs: &[Fq], sumcheck_random_challenges: &[
     (o_1, o_2)
 }
 
-
 #[cfg(test)]
 mod test {
+    use super::{combine_polynomials_using_operators, prove, verify};
+    use crate::implementations::circuit::{Circuit, Gates, Layers, Operator};
     use ark_bn254::Fq;
-    use super::{
-        prove, verify, combine_polynomials_using_operators,
-    };
-    use crate::implementations::
-        circuit::{Circuit, Gates, Layers, Operator}
-    ;
 
     #[test]
     fn it_add_polys_correctly() {
@@ -408,9 +403,46 @@ mod test {
         assert_eq!(result.evaluation, expected_poly);
     }
 
-
     #[test]
     fn test_prove() {
+        let inputs: Vec<Fq> = vec![
+            Fq::from(5),
+            Fq::from(2),
+            Fq::from(2),
+            Fq::from(4),
+            Fq::from(10),
+            Fq::from(0),
+            Fq::from(3),
+            Fq::from(3),
+        ];
+
+        let test_circuit: Vec<Layers<Fq>> = vec![
+            Layers::new_layer(vec![
+                Gates::new_gate(inputs[0], inputs[1], Operator::Mul),
+                Gates::new_gate(inputs[2], inputs[3], Operator::Mul),
+                Gates::new_gate(inputs[4], inputs[5], Operator::Mul),
+                Gates::new_gate(inputs[6], inputs[7], Operator::Mul),
+            ]),
+            Layers::new_layer(vec![
+                Gates::new_gate(inputs[0], inputs[1], Operator::Add),
+                Gates::new_gate(inputs[2], inputs[3], Operator::Add),
+            ]),
+            Layers::new_layer(vec![Gates::new_gate(inputs[4], inputs[5], Operator::Add)]),
+        ];
+
+        let mut circuit = Circuit::<Fq>::new_circuit(test_circuit);
+
+        // Generate proof
+        let proof = prove(&mut circuit, inputs.clone());
+
+        // Verify proof
+        let verification_result = verify(proof, circuit, &inputs);
+
+        assert!(verification_result, "Proof verification failed");
+    }
+
+        #[test]
+    fn test_prove_verify() {
         let inputs: Vec<Fq> = vec![
             Fq::from(5),
             Fq::from(2),
@@ -447,88 +479,45 @@ mod test {
         let verification_result = verify(proof, circuit, &inputs);
 
         assert!(verification_result, "Proof verification failed");
-    }
 
-//     #[test]
-// fn test_prove_verify() {
-//     let inputs: Vec<Fq> = vec![
-//         Fq::from(5),
-//         Fq::from(2),
-//         Fq::from(2),
-//         Fq::from(4),
-//         Fq::from(10),
-//         Fq::from(0),
-//         Fq::from(3),
-//         Fq::from(3),
-//     ];
-
-//     let test_circuit: Vec<Layers<Fq>> = vec![
-//         Layers::new_layer(vec![
-//             Gates::new_gate(inputs[0], inputs[1], Operator::Mul),
-//             Gates::new_gate(inputs[2], inputs[3], Operator::Mul),
-//             Gates::new_gate(inputs[4], inputs[5], Operator::Mul),
-//             Gates::new_gate(inputs[6], inputs[7], Operator::Mul),
-//         ]),
-//         Layers::new_layer(vec![
-//             Gates::new_gate(inputs[0], inputs[1], Operator::Add),
-//             Gates::new_gate(inputs[2], inputs[3], Operator::Add),
-//         ]),
-//         Layers::new_layer(vec![
-//             Gates::new_gate(inputs[4], inputs[5], Operator::Add),
-//         ]),
-//     ];
-
-//     let mut circuit = Circuit::<Fq>::new_circuit(test_circuit);
-
-//     // Generate proof
-//     let proof = prove(&mut circuit, inputs.clone());
-
-//     // Verify proof
-//     let verification_result = verify(proof, circuit, &inputs);
-
-//     assert!(verification_result, "Proof verification failed");
+        }
 
 
+     #[test]
+        fn test_valid_proving_and_verification() {
+            let circuit_structure: Vec<Layers<Fq>> = vec![
+                Layers::new_layer(vec![
+                    Gates::new_gate(Fq::from(0), Fq::from(0), Operator::Mul),
+                    Gates::new_gate(Fq::from(0), Fq::from(0), Operator::Mul),
+                    Gates::new_gate(Fq::from(0), Fq::from(0), Operator::Mul),
+                    Gates::new_gate(Fq::from(0), Fq::from(0), Operator::Mul),
+                ]),
+                Layers::new_layer(vec![
+                    Gates::new_gate(Fq::from(0), Fq::from(0), Operator::Add),
+                    Gates::new_gate(Fq::from(0), Fq::from(0), Operator::Add),
+                ]),
+                Layers::new_layer(vec![
+                    Gates::new_gate(Fq::from(0), Fq::from(0), Operator::Add),
+                ]),
+            ];
 
-//     }
+            let inputs: Vec<Fq> = vec![
+                Fq::from(5),
+                Fq::from(2),
+                Fq::from(2),
+                Fq::from(4),
+                Fq::from(10),
+                Fq::from(0),
+                Fq::from(3),
+                Fq::from(3),
+            ];
 
+            let mut circuit = Circuit::new_circuit(circuit_structure);
 
-//  #[test]
-//     fn test_valid_proving_and_verification() {
-//         let circuit_structure: Vec<Layers<Fq>> = vec![
-//             Layers::new_layer(vec![
-//                 Gates::new_gate(Fq::from(0), Fq::from(0), Operator::Mul),
-//                 Gates::new_gate(Fq::from(0), Fq::from(0), Operator::Mul),
-//                 Gates::new_gate(Fq::from(0), Fq::from(0), Operator::Mul),
-//                 Gates::new_gate(Fq::from(0), Fq::from(0), Operator::Mul),
-//             ]),
-//             Layers::new_layer(vec![
-//                 Gates::new_gate(Fq::from(0), Fq::from(0), Operator::Add),
-//                 Gates::new_gate(Fq::from(0), Fq::from(0), Operator::Add),
-//             ]),
-//             Layers::new_layer(vec![
-//                 Gates::new_gate(Fq::from(0), Fq::from(0), Operator::Add),
-//             ]),
-//         ];
+            let proof = prove(&mut circuit, inputs.clone());
 
-//         let inputs: Vec<Fq> = vec![
-//             Fq::from(5),
-//             Fq::from(2),
-//             Fq::from(2),
-//             Fq::from(4),
-//             Fq::from(10),
-//             Fq::from(0),
-//             Fq::from(3),
-//             Fq::from(3),
-//         ];
+            let is_verified = verify(proof, circuit, &inputs);
 
-//         let mut circuit = Circuit::new_circuit(circuit_structure);
-
-//         let proof = prove(&mut circuit, inputs.clone());
-
-//         let is_verified = verify(proof, circuit, &inputs);
-
-//         assert_eq!(is_verified, true);
-//     }
-
+            assert_eq!(is_verified, true);
+        }
 }

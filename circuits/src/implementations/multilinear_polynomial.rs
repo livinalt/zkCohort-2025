@@ -10,16 +10,16 @@ pub struct MultilinearPoly<F: PrimeField> {
 
 impl<F: PrimeField> MultilinearPoly<F> {
     pub fn new(new_evaluations: Vec<F>) -> Self {
+
         if new_evaluations.is_empty() {
             panic!("Evaluation set cannot be empty");
         }
+        
         let number_of_variables: usize = new_evaluations.len().ilog2() as usize;
-        println!("number of variables::{}", number_of_variables);
 
         if new_evaluations.len() != 1 << number_of_variables {
             panic!("Invalid evaluations");
         }
-        println!("Evaluations length: {}", new_evaluations.len());
 
         Self {
             evaluation: new_evaluations,
@@ -74,11 +74,6 @@ impl<F: PrimeField> MultilinearPoly<F> {
         if result.is_empty() {
             panic!("Partial evaluation results in an empty vector!");
         }
-
-        // println!(
-        //     "The partial evaluate result is = {}",
-        //     format!("{:?}", result)
-        // );
 
         Self::new(result)
     }

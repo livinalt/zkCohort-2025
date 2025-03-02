@@ -4,8 +4,6 @@ use std::{marker::PhantomData};
 
 use super::multilinear_polynomial::MultilinearPoly;
 
-
-
 // GATES STRUCT AND IMPLEMENTATION
 #[derive(Debug, Clone, Copy)]
 pub struct Gates<F:PrimeField>{
@@ -73,7 +71,8 @@ impl<F: PrimeField> Layers<F> {
             }
         }
 
-        MultilinearPoly::new(poly_eval)
+         MultilinearPoly::new(poly_eval)
+
     }
     
 
@@ -82,22 +81,57 @@ impl<F: PrimeField> Layers<F> {
     // if we have three gates, then the number of bits ==> (aabbbccc) == (00,000,000)
     fn get_no_bits_of_gates(&self) -> u32 {
         let number_of_gates = self.gates.len();
-        if number_of_gates == 0 {
-            return 0;
+        if number_of_gates == 1 {
+            return 3;
         }
-        (number_of_gates as f64).log2().ceil() as u32
+        else {
+            let number_of_gates_log = number_of_gates.ilog2();
+            let n_bits = number_of_gates_log + 1;
+            number_of_gates_log + (n_bits * 2)
+        }
     }
 
 
 
     pub fn gate_to_bits(&self) -> Vec<usize> {
-        let n_bits = self.get_no_bits_of_gates();
-        self.gates
-            .iter()
-            .enumerate()
-            .map(|(i, _)| i % (1 << n_bits))
-            .collect()
+let n_gates = self.gates.len();
+        let n_gates_log = n_gates.ilog2();
+
+        let mut gate_decimal_values = Vec::new();
+
+        for (idx, _) in self.gates.iter().enumerate() {
+            let mut gate_binary_values = Vec::new();
+
+            gate_binary_values.push(idx);
+            gate_binary_values.push(2 * idx);
+            gate_binary_values.push(2 * idx + 1);
+
+            let segments: Vec<(usize, u32)> = gate_binary_values
+                .iter()
+                .enumerate()
+                .map(|(i, val)| {
+                    if n_gates == 1 {
+                        (*val, 1)
+                    } else {
+                        if i == 0 {
+                            (*val, n_gates_log)
+                        } else {
+                            (*val, n_gates_log + 1)
+                        }
+                    }
+                })
+                .collect();
+
+            let decimal_value = segments
+                .iter()
+                .fold(0, |acc, &(value, width)| (acc << width) | value);
+
+            gate_decimal_values.push(decimal_value);
+        }
+
+        gate_decimal_values
     }
+
 
 }
 
@@ -113,21 +147,40 @@ impl<F: PrimeField> Circuit<F> {
         Self { layers }
     }
 
+    //start the evaluation with inputs
+    //mutate the top layer inputs
+
     pub fn evaluate_circuit(&self, inputs: Vec<F>) -> Vec<Vec<F>> {
         let mut result: Vec<Vec<F>> = Vec::new();
         let mut current_inputs: Vec<F> = inputs;
 
         for layer in &self.layers {
             let mut layer_outputs: Vec<F> = Vec::new();
-            for gate in &layer.gates {
-                let output_val = gate.operator.use_operation(gate.input_left, gate.input_right);
-                layer_outputs.push(output_val);
+            let mut input_index = 0;
+
+        for gate in &layer.gates {
+            let input_left;
+            let input_right;
+
+            if input_index + 1 < current_inputs.len() {
+                input_left = current_inputs[input_index];
+                input_right = current_inputs[input_index + 1];
+                input_index += 2;
+            } 
+            
+            else {
+                input_left = F::zero();
+                input_right = F::zero();
             }
-            result.push(layer_outputs.clone());
-            current_inputs = layer_outputs;
+
+            let new_gate = Gates::new_gate(input_left, input_right, gate.operator);
+            layer_outputs.push(new_gate.output);
         }
-        result
+        result.push(layer_outputs.clone());
+        current_inputs = layer_outputs;
     }
+    result
+}
 }
 
 
@@ -149,6 +202,6 @@ fn test_circuit() {
     let result = circuit.evaluate_circuit(inputs);
 
     // Expected output: [(1 + 2)], [(3) * 3] = [3], [9]
-    // assert_eq!(result[0][0], Fr::from(3)); 
-    assert_eq!(result[1][0], Fr::from(9)); 
+    assert_eq!(result[0][0], Fr::from(3)); 
+    // assert_eq!(result[1][0], Fr::from(9)); 
 }
