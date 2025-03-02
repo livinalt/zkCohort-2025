@@ -128,7 +128,7 @@ mod test {
     use super::{ProductPoly, SumPoly};
 
     #[test]
-    fn product_poly_evaluates_multiple_polys() {
+    fn test_product_poly_evaluation() {
 
         let poly_evals = vec![
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3)],
@@ -147,7 +147,7 @@ mod test {
     }
 
     #[test]
-    fn product_poly_partially_evaluates_multiple_polys() {
+    fn test_product_poly_partial_evaluations() {
         
         let poly_evals = vec![
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3)],
@@ -176,7 +176,7 @@ mod test {
 
     #[test]
     #[should_panic]
-    fn product_poly_doesnt_allow_different_evaluation_size() {
+    fn test_product_poly_rejects_mismatched_evaluation_sizes() {
         let poly_evals = vec![
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3)],
             vec![
@@ -195,13 +195,47 @@ mod test {
     }
 
     #[test]
-    fn product_poly_gets_correct_degree() {}
+    fn test_product_poly_degree_is_correct() {
+        let poly_evals = vec![
+            vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3)],
+            vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(2)],
+        ];
+
+        let product_poly = ProductPoly::init_poly(poly_evals);
+
+        let expected_degree = 2;
+
+        let result = product_poly.get_degree();
+
+        assert_eq!(expected_degree, result);
+    }
 
     #[test]
-    fn sum_poly_gets_correct_degree() {}
+    fn test_sum_poly_degree_is_correct() {
+        let poly_evals_1 = vec![
+            vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3)],
+            vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(2)],
+        ];
+
+        let poly_evals_2 = vec![
+            vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(4)],
+            vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(5)],
+        ];
+
+        let product_poly_1 = ProductPoly::init_poly(poly_evals_1);
+        let product_poly_2 = ProductPoly::init_poly(poly_evals_2);
+
+        let sum_poly = SumPoly::new(vec![product_poly_1, product_poly_2]);
+
+        let expected_degree = 2;
+
+        let result = sum_poly.get_degree();
+
+        assert_eq!(expected_degree, result);
+    }
 
     #[test]
-    fn sum_poly_evaluates_properly() {
+    fn test_sum_poly_evaluation() {
         let poly_evals_1 = vec![
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3)],
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(2)],
@@ -227,7 +261,7 @@ mod test {
     }
 
     #[test]
-    fn sum_poly_partially_evaluates_properly() {
+    fn  test_sum_poly_partially_evaluates_correctly() {
         let poly_evals_1 = vec![
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3)],
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(2)],

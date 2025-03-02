@@ -1,5 +1,5 @@
 use ark_bn254::Fr;
-use ark_ff::PrimeField;
+use ark_ff::{PrimeField, One};
 use super::multilinear_polynomial::MultilinearPoly;
 
 // GATES STRUCT AND IMPLEMENTATION
@@ -204,3 +204,61 @@ fn test_circuit() {
     assert_eq!(result[0][0], Fr::from(3)); 
     // assert_eq!(result[1][0], Fr::from(9)); 
 }
+
+
+#[test]
+fn test_gate() {
+    let input1 = Fr::from(1);
+    let input2 = Fr::from(2);
+    let input3 = Fr::from(3);
+
+    let gate1: Gates<Fr> = Gates::new_gate(input1, input2, Operator::Add);
+    let gate2: Gates<Fr> = Gates::new_gate(gate1.output, input3, Operator::Mul);
+
+    assert_eq!(gate1.output, Fr::from(3));
+    assert_eq!(gate2.output, Fr::from(9));
+}
+
+#[test]
+fn test_layer_new_layer() {
+    let input1 = Fr::from(1);
+    let input2 = Fr::from(2);
+
+    let gate1: Gates<Fr> = Gates::new_gate(input1, input2, Operator::Add);
+    let layer: Layers<Fr> = Layers::new_layer(vec![gate1]);
+
+    assert_eq!(layer.gates.len(), 1);
+    assert_eq!(layer.gates[0].output, Fr::from(3));
+}
+
+#[test]
+fn test_layer_get_output_for_layers() {
+    let input1 = Fr::from(1);
+    let input2 = Fr::from(2);
+
+    let gate1: Gates<Fr> = Gates::new_gate(input1, input2, Operator::Add);
+    let layer: Layers<Fr> = Layers::new_layer(vec![gate1]);
+
+    let outputs = layer.get_output_for_layers();
+    assert_eq!(outputs.len(), 1);
+    assert_eq!(outputs[0], Fr::from(3));
+}
+
+#[test]
+fn test_layer_get_operators_of_layers() {
+    let input1 = Fr::from(1);
+    let input2 = Fr::from(2);
+
+    let gate1: Gates<Fr> = Gates::new_gate(input1, input2, Operator::Add);
+    let gate2: Gates<Fr> = Gates::new_gate(input1, input2, Operator::Mul);
+    let layer: Layers<Fr> = Layers::new_layer(vec![gate1, gate2]);
+
+    let add_gates = layer.get_operators_of_layers(Operator::Add);
+    let mul_gates = layer.get_operators_of_layers(Operator::Mul);
+
+    assert_eq!(add_gates.len(), 1);
+    assert_eq!(mul_gates.len(), 1);
+    assert_eq!(add_gates[0].output, Fr::from(3));
+    assert_eq!(mul_gates[0].output, Fr::from(2));
+}
+
