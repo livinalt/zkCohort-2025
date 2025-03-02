@@ -40,11 +40,9 @@ pub fn fq_vec_to_bytes(values: &[Fq]) -> Vec<u8> {
 #[cfg(test)]
 mod test {
 
-    use super::Keccak256;
     use super::Transcript;
     use ark_bn254::Fq;
     use ark_ff::{BigInteger, PrimeField};
-    use sha3::Digest;
 
     #[test]
     fn test_hash() {

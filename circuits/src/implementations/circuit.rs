@@ -1,7 +1,5 @@
 use ark_bn254::Fr;
 use ark_ff::PrimeField;
-use std::{marker::PhantomData};
-
 use super::multilinear_polynomial::MultilinearPoly;
 
 // GATES STRUCT AND IMPLEMENTATION
@@ -79,6 +77,7 @@ impl<F: PrimeField> Layers<F> {
     // if we have one gate, then the number of bits ==> (abc) == (000)
     // if we have two gates, then the number of bits ==> (abbcc) == (0,00,00)
     // if we have three gates, then the number of bits ==> (aabbbccc) == (00,000,000)
+    
     fn get_no_bits_of_gates(&self) -> u32 {
         let number_of_gates = self.gates.len();
         if number_of_gates == 1 {

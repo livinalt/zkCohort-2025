@@ -1,11 +1,6 @@
 use std::iter::{Product, Sum};
 use std::ops::{Add, Mul};
-use std::result;
-
-use ark_bn254::Fq;
-use ark_ff::{PrimeField, Zero};
-
-use super::composed_poly::SumPoly;
+use ark_ff::PrimeField;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct UnivariatePoly <F>  {
@@ -21,23 +16,9 @@ impl <F: PrimeField>UnivariatePoly<F> {
         
         self.coefficient.len() - 1
         
-        // for (i, coeff) in self.coefficient.iter().enumerate().rev() {
-        //     if *coeff != 0 {
-        //         return i;
-        //     }
-        // }
-        // 0
     }
 
     pub fn evaluate(&self, x: F) -> F {
-        // let mut result=0;
-        // let mut power = 1;
-
-        // for i in 0..self.coefficient.len() {
-        //     result = result + self.coefficient[i] * power;
-        //     power = power * x;
-        // }
-        // result
 
         self.coefficient.iter().rev().cloned().reduce(|acc, curr|acc * x + curr).unwrap()
     }
@@ -64,25 +45,6 @@ impl <F: PrimeField>UnivariatePoly<F> {
         }
         result
     }
-
-    // Polynomial interpolation (Lagrange interpolation)
-    fn get_round_partial_polynomial_proof_gkr(composed_poly: &SumPoly<Fq>) -> UnivariatePoly<Fq> {
-        let degree = composed_poly.get_degree();
-        let mut poly_proof = Vec::with_capacity(degree + 1);
-
-        for i in 0..=degree {
-            let value = Fq::from(i as u64);
-            let partial_poly = composed_poly.partial_evaluate(&value);
-            let eval = partial_poly.reduce().iter().sum();
-            poly_proof.push(eval);
-        }
-
-        let xs: Vec<Fq> = (0..=degree).map(|i| Fq::from(i as u64)).collect();
-        let ys: Vec<Fq> = poly_proof.clone();  // Use y-values directly
-
-        UnivariatePoly::interpolate(xs, ys)
-    }
-
 
     fn scalar_mul(&self, scalar: &F) -> Self {
         UnivariatePoly {

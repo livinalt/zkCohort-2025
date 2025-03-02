@@ -1,11 +1,9 @@
 use crate::implementations::multilinear_polynomial::MultilinearPoly;
-use crate::implementations::transcript::{Transcript};
+use crate::implementations::transcript::Transcript;
 use crate::implementations::univariate_poly::UnivariatePoly;
 use ark_ff::{BigInteger, PrimeField};
-use ark_bn254::{Fq, Fr};
-use sha3::{Keccak256, Digest};
-
-use super::composed_poly::{ProductPoly, SumPoly};
+use ark_bn254::Fq;
+use super::composed_poly::SumPoly;
 use super::transcript::fq_vec_to_bytes;
 
 #[derive(Debug, Clone)]
@@ -225,17 +223,6 @@ fn get_round_partial_polynomial_proof_gkr(composed_poly: &SumPoly<Fq>) -> Univar
     
     poly
 
-}
-
-
-fn get_round_partial_polynomial_proof(polynomial: &[Fq]) -> Vec<Fq> {
-    let mid_point = polynomial.len() / 2;
-    
-    let (zeros, ones) = polynomial.split_at(mid_point);
-
-    let poly_proof = vec![zeros.iter().sum(), ones.iter().sum()];
-
-    poly_proof
 }
 
 

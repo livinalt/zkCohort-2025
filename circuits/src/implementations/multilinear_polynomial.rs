@@ -1,5 +1,4 @@
 use ark_ff::PrimeField;
-use std::fmt::Display;
 use std::ops::{Add, Mul};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -136,14 +135,6 @@ impl<F: PrimeField> Mul for MultilinearPoly<F> {
 
         MultilinearPoly::new(result)
     }
-}
-
-fn insert_bit(value: usize, bit: usize) -> usize {
-    let high = value >> bit;
-    let mask = (1 << bit) - 1;
-    let low = value & mask;
-
-    high << (bit + 1) | low
 }
 
 

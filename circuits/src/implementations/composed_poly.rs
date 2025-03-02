@@ -72,7 +72,9 @@ impl<F: PrimeField> ProductPoly<F> {
 
 impl<F: PrimeField> SumPoly<F> {
     pub fn new(polys: Vec<ProductPoly<F>>) -> Self {
+
         let poly_length = polys[0].get_degree();
+
         if polys.iter().any(|poly| poly.get_degree() != poly_length) {
             panic!("all product polys must have same degree");
         }
@@ -81,6 +83,7 @@ impl<F: PrimeField> SumPoly<F> {
     }
 
     pub fn evaluate(&self, values: Vec<F>) -> F {
+
         self.polys
             .iter()
             .map(|poly| poly.evaluate(values.clone()))
@@ -88,6 +91,7 @@ impl<F: PrimeField> SumPoly<F> {
     }
 
     pub fn partial_evaluate(&self, value: &F) -> Self {
+
         let partial_polys = self
             .polys
             .iter()
@@ -98,6 +102,7 @@ impl<F: PrimeField> SumPoly<F> {
     }
 
     pub fn reduce(&self) -> Vec<F> {
+
         let poly_a = &self.polys[0].reduce();
         let poly_b = &self.polys[1].reduce();
 
@@ -113,6 +118,7 @@ impl<F: PrimeField> SumPoly<F> {
     pub fn get_degree(&self) -> usize {
         self.polys[0].get_degree()
     }
+
 }
 
 #[cfg(test)]
@@ -123,6 +129,7 @@ mod test {
 
     #[test]
     fn product_poly_evaluates_multiple_polys() {
+
         let poly_evals = vec![
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3)],
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(2)],
@@ -141,6 +148,7 @@ mod test {
 
     #[test]
     fn product_poly_partially_evaluates_multiple_polys() {
+        
         let poly_evals = vec![
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(3)],
             vec![Fq::from(0), Fq::from(0), Fq::from(0), Fq::from(2)],
